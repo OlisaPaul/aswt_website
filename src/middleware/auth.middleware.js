@@ -28,10 +28,10 @@ module.exports = async function (req, res, next) {
     req.user = decoded;
     const user = await userServices.getUserById(req.user._id);
 
-    // if (!user)
-    //   return res
-    //     .status(400)
-    //     .send({ success: false, message: "Invalid Web Token" });
+    if (!user)
+      return res
+        .status(400)
+        .send({ success: false, message: "Invalid Web Token" });
     next();
   } catch (ex) {
     // it throws an error which is caught and sent to the client as response.
