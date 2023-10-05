@@ -9,10 +9,25 @@ const errorMessage = (resource, resourceId = resource) => {
 
 const errorMessageUserName = () => {
   return {
-
     message: "We can't find user with the given userName",
     success: false,
   };
+};
+
+const jsonResponse = (res, stastusCode = 200, success = true, message) => {
+  return res.status(stastusCode).send({ message, success });
+};
+
+const badReqResponse = (res, message) => {
+  return res.status(400).send({ message, success: false });
+};
+
+const forbiddenResponse = (res, message) => {
+  return res.status(403).send({ message, success: false });
+};
+
+const notFoundResponse = (res, message) => {
+  return res.status(404).send({ message, success: false });
 };
 
 const successMessage = (message, data) => {
@@ -27,8 +42,11 @@ const loginError = () => {
   return { message: MESSAGES.LOGIN_FAILURE, success: false };
 };
 
-const loginSuccess = (data) => {
-  return { message: MESSAGES.SUCCESFUL_LOGIN, success: true, token: data };
+const loginSuccess = (token, user) => {
+  return { message: MESSAGES.SUCCESFUL_LOGIN, success: true, token, user };
+};
+const logoutSuccess = () => {
+  return { message: MESSAGES.SUCCESFUL_LOGOUT, success: true };
 };
 
 exports.errorMessage = errorMessage;
@@ -37,3 +55,8 @@ exports.successMessage = successMessage;
 exports.unAuthMessage = unAuthMessage;
 exports.loginError = loginError;
 exports.loginSuccess = loginSuccess;
+exports.logoutSuccess = logoutSuccess;
+exports.jsonResponse = jsonResponse;
+exports.badReqResponse = badReqResponse;
+exports.forbiddenResponse = forbiddenResponse;
+exports.notFoundResponse = notFoundResponse;

@@ -3,10 +3,9 @@ module.exports = [
   "firstName",
   "lastName",
   "email",
-  "username",
   "avatarUrl",
   "avatarImgTag",
-  "freelancer",
-  "company",
   "role",
+  "departments",
+  "id",
 ];

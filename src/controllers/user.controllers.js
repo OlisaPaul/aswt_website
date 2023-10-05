@@ -1,15 +1,19 @@
+require("dotenv").config();
 const _ = require("lodash");
-const { User } = require("../model/user.model");
+const jwt = require("jsonwebtoken");
 const userService = require("../services/user.services");
 const { MESSAGES } = require("../common/constants.common");
-const propertiesToPick = require("../common/propertiesToPick.common");
-const { transporter, mailOptions } = require("../utils/email.utils");
-const {
-  errorMessage,
-  errorMessageUserName,
-  successMessage,
-} = require("../common/messages.common");
+const { errorMessage, successMessage } = require("../common/messages.common");
 const generateRandomAvatar = require("../utils/generateRandomAvatar.utils");
+const departmentServices = require("../services/department.services");
+const { transporter, mailOptions } = require("../utils/email.utils");
+const bcrypt = require("bcrypt");
+const propertiesToPick = require("../common/propertiesToPick.common");
+const {
+  jsonResponse,
+  badReqResponse,
+  forbiddenResponse,
+} = require("../common/messages.common");
 
 class UserController {
   async getStatus(req, res) {
@@ -18,116 +22,179 @@ class UserController {
 
   //Create a new user
   async register(req, res) {
+    const { departments, email, role } = req.body;
+    const { createUserWithAvatar } = userService;
+
+    if (req.body.departments)
+      if (typeof req.body.departments[0] !== "string")
+        return jsonResponse(res, 400, false, "invalid ID");
+
+    if (req.user.role === "manager" && role === "manager")
+      return forbiddenResponse(res, "Only admins can create managers");
+
+    req.body.email = req.body.email.toLowerCase();
     // Checks if a user already exist by using the email id
-    let user = await userService.getUserByEmail(req.body.email);
-    if (user)
-      return res
-        .status(400)
-        .send({ success: false, message: "User already registered" });
+    let [user, invalidIds] = await Promise.all([
+      userService.getUserByEmail(email),
+      departmentServices.validateDepartmentIds(departments),
+    ]);
 
-    const userName = await userService.getUserByUsername(
-      `@${req.body.userName}`
-    );
-    if (userName)
-      return res.status(400).send({
-        success: false,
-        message: "Username has been taken, please use another one",
-      });
+    if (user) return jsonResponse(res, 400, false, MESSAGES.USER_EXISTS);
+    if (invalidIds.length > 0)
+      return jsonResponse(
+        res,
+        400,
+        false,
+        MESSAGES.INVALID(invalidIds, "departments")
+      );
 
-    user = new User(_.pick(req.body, [...propertiesToPick, "password"]));
-
-    const avatarUrl = await generateRandomAvatar(user.email);
-    user.avatarUrl = avatarUrl;
-    user.avatarImgTag = `<img src=${avatarUrl} alt=${user._id}>`;
-
-    user.userName = `@${req.body.userName}`;
-
-    user.role = user.role.toLowerCase();
-
-    user = await userService.createUser(user);
-
-    // it creates a token which is sent as an header to the client
-    const token = user.generateAuthToken();
-
-    user = _.pick(user, propertiesToPick);
-
-    transporter.sendMail(
-      mailOptions(user.email, user.firstName),
-      (error, info) => {
-        if (error) {
-          console.error("Error occurred:", error);
-        } else {
-          console.log("Email sent successfully:", info.response);
-        }
-      }
-    );
+    const userWithAvatar = await createUserWithAvatar(req, user, departments);
 
     res
-      .header("x-auth-header", token)
+      .header("x-auth-header", userWithAvatar.token)
       .header("access-control-expose-headers", "x-auth-token")
       // It determines what is sent back to the client
-      .send(successMessage(MESSAGES.CREATED, user));
+      .send(successMessage(MESSAGES.CREATED, userWithAvatar.user));
   }
 
   //get user from the database, using their email
   async gethUserById(req, res) {
-    const user = await userService.getUserById(req.params.id);
+    const { getUserWithoutPasswordById } = userService;
+    const role = req.user.role;
+    const isUserStaff = role === "staff";
+    const totalArgs = [role];
+
+    isUserStaff ? totalArgs.push(req.user._id) : totalArgs.push(req.params.id);
+
+    const user = await getUserWithoutPasswordById(...totalArgs);
 
     if (!user) return res.status(404).send(errorMessage("user"));
 
-    res.send(successMessage(MESSAGES.FETCHED, user));
+    return res.send(successMessage(MESSAGES.FETCHED, user));
   }
 
-  async getUserByUsername(req, res) {
-    let userName = req.params.userName;
-    if (userName && !userName.startsWith("@")) userName = `@${userName}`;
+  async getStaffsByDepartments(req, res) {
+    const staff = await userService.getStaffsByDepartments(
+      req.user.departments
+    );
+    if (!staff) return res.status(404).send(errorMessage("staff"));
 
-    const user = await userService.getUserByUsername(userName);
+    res.send(successMessage(MESSAGES.FETCHED, staff));
+  }
 
-    if (!user) return res.status(404).send(errorMessageUserName());
+  async getLoggedInStaffs(req, res) {
+    const loggedInStaff = await userService.getLoggedInStaffs();
 
-    res.send(successMessage(MESSAGES.FETCHED, user));
+    // if (loggedInStaff.length < 1)
+    //   return res
+    //     .status(404)
+    //     .send({ message: "No staff is logged in", success: false });
+
+    res.send(successMessage(MESSAGES.FETCHED, loggedInStaff));
   }
 
   //get all users in the user collection/table
   async fetchAllUsers(req, res) {
-    const users = await userService.getAllUsers();
+    const users =
+      req.user.role === "manager"
+        ? await userService.getStaffsByDepartments(req.user.departments)
+        : await userService.getAllUsers();
 
     res.send(successMessage(MESSAGES.FETCHED, users));
   }
 
   async getUsersByRole(req, res) {
-    const roles = ["freelancer", "company"];
-    if (!roles.includes(req.params.role))
-      return res
-        .status(400)
-        .send({ success: false, message: `role can only be one of ${roles}` });
+    const users =
+      req.user.role === "staff"
+        ? await userService.getCustomersForStaff()
+        : await userService.getUsersByRole(req.params.role);
 
-    const freelancers = await userService.getUsersByRole(req.params.role);
-
-    res.send(successMessage(MESSAGES.FETCHED, freelancers));
+    res.send(successMessage(MESSAGES.FETCHED, users));
   }
 
-  async getUserByRole(req, res) {
-    const { role, id } = req.params;
+  async getEmployees(req, res) {
+    const users = await userService.getEmployees();
 
-    const roles = ["freelancer", "company"];
-    if (!roles.includes(role))
-      return res
-        .status(400)
-        .send({ success: false, message: `role can only be one of ${roles}` });
-
-    const user = await userService.getUserByRole(role, id);
-    if (!user) return res.status(404).send(errorMessage("user"));
-
-    res.send(successMessage(MESSAGES.FETCHED, user));
+    res.send(successMessage(MESSAGES.FETCHED, users));
   }
 
+  //get all users in the user collection/table
+  async passwordResetRequest(req, res) {
+    const user = await userService.getUserByEmail(req.body.email);
+    if (!user)
+      return res.status(404).send({
+        success: false,
+        message:
+          "We could not find an account associated with the email address you provided",
+      });
+
+    let token = jwt.sign({ id: user._id }, process.env.jwtPrivateKey, {
+      expiresIn: "1h",
+    });
+
+    user.resetToken = token;
+    await user.save();
+
+    transporter.sendMail(
+      mailOptions(user.email, user.firstName, token),
+      (error, info) => {
+        if (error) {
+          return "Error occurred:", error;
+        } else {
+          console.log("Email sent successfully");
+        }
+      }
+    );
+
+    res.send({
+      message: "We've sent you a password reset email",
+      success: true,
+    });
+  }
+
+  async passwordReset(req, res) {
+    let token = req.params.token;
+    const { newPassword, confirmPassword } = req.body;
+
+    // Verify token
+    jwt.verify(token, process.env.jwtPrivateKey, async (err, decoded) => {
+      if (err) {
+        return res.status(400).json({ error: "Invalid or expired link" });
+      }
+
+      // Find user by id and update password
+      let user = await userService.getUserById(decoded.id);
+      if (!user) return res.status(400).json({ error: "User not found" });
+
+      // Validate and save new password
+      if (newPassword !== confirmPassword)
+        return res.status(400).send({
+          message: "New password and confirm password does not match",
+          succes: false,
+        });
+
+      const salt = await bcrypt.genSalt(10);
+      user.password = await bcrypt.hash(newPassword, salt);
+
+      user.resetToken = undefined;
+      user.save();
+
+      res.json({ message: "Password updated", success: true });
+    });
+  }
   //Update/edit user data
   async updateUserProfile(req, res) {
-    let user = await userService.getUserById(req.params.id);
+    const { role } = req.body;
+    if (role) req.body.role = role.toLowerCase();
 
+    const user = await userService.getUserById(req.params.id);
     if (!user) return res.status(404).send(errorMessage("user"));
+
+    if (user.isAdmin && role)
+      return badReqResponse(res, "Cannot change role of an admin");
+
+    if (role && user.role === role.toLowerCase())
+      return badReqResponse(res, `The user is already a ${role}`);
 
     let updatedUser = req.body;
 
@@ -138,16 +205,50 @@ class UserController {
 
     updatedUser = await userService.updateUserById(req.params.id, updatedUser);
 
+    updatedUser = _.pick(updatedUser, propertiesToPick);
+
     res.send(successMessage(MESSAGES.UPDATED, updatedUser));
+  }
+
+  async updateUserPassword(req, res) {
+    const { currentPassword, newPassword, confirmPassword } = req.body;
+
+    const user = await userService.getUserById(req.user._id);
+    if (!user) return res.status(404).send(errorMessage("user"));
+
+    //checks if the password is valid
+    const validPassword = await bcrypt.compare(currentPassword, user.password);
+    if (!validPassword)
+      return res.status(400).send({
+        message: "The password you provided is incorrect",
+        succes: false,
+      });
+
+    if (newPassword !== confirmPassword)
+      return res.status(400).send({
+        message: "New password and confirm password does not match",
+        succes: false,
+      });
+
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(newPassword, salt);
+
+    await user.save();
+
+    res.json({ message: "Password updated", success: true });
   }
 
   //Delete user account entirely from the database
   async deleteUserAccount(req, res) {
-    const user = await userService.getUserById(req.params.id);
-
+    let user = await userService.getUserById(req.params.id);
     if (!user) return res.status(404).send(errorMessage("user"));
 
-    await userService.deleteUser(req.params.id);
+    if (user.isAdmin)
+      return badReqResponse(res, "You can not delete an admin account");
+
+    await userService.softDeleteUser(req.params.id);
+
+    user = _.pick(user, propertiesToPick);
 
     res.send(successMessage(MESSAGES.DELETED, user));
   }
