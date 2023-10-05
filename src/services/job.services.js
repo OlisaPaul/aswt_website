@@ -10,8 +10,20 @@ class JobService {
     return await Job.findById(jobId);
   }
 
-  async getJobsByCompanyId(companyId) {
-    return await Job.find({ companyId });
+  async validateJobIds(jobIds) {
+    const jobs = await Job.find({
+      _id: { $in: jobIds },
+    });
+
+    const foundIds = jobs.map((d) => d._id.toString());
+
+    const missingIds = jobIds.filter((id) => !foundIds.includes(id));
+
+    return missingIds;
+  }
+
+  async getJobByEntryIdAndStaffId(entryId, staffId) {
+    return await Job.findOne({ entryId, staffId });
   }
 
   async getAllJobs() {
