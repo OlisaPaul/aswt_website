@@ -1,8 +1,16 @@
 const mongoose = require("mongoose");
-const { days, validMonthNames } = require("../common/constants.common");
+const { days, validMonthNames, DATE } = require("../common/constants.common");
 
 class EntryUtils {
-  pipeline = ({ entryId, staffId, date, startDate, endDate, customerId }) => {
+  pipeline = ({
+    entryId,
+    staffId,
+    date,
+    startDate,
+    endDate,
+    customerId,
+    vin,
+  }) => {
     const match = {};
     if (entryId) {
       match._id = new mongoose.Types.ObjectId(entryId);
@@ -22,6 +30,7 @@ class EntryUtils {
             startDate,
             date,
             endDate,
+            vin,
           }),
         },
       },
@@ -243,7 +252,7 @@ class EntryUtils {
     return invoice;
   }
 
-  filteredDetails = ({ staffId, date, startDate, endDate }) => {
+  filteredDetails = ({ staffId, date, startDate, endDate, vin }) => {
     return {
       $filter: {
         input: "$invoice.carDetails",
@@ -253,18 +262,37 @@ class EntryUtils {
           date,
           startDate,
           endDate,
+          vin,
         }),
       },
     };
   };
 
-  dateFilter({ staffId, date, startDate, endDate }) {
+  dateFilter({ staffId, date, startDate, endDate, vin }) {
     const staffFilter = {
       $eq: ["$$car.staffId", new mongoose.Types.ObjectId(staffId)],
     };
+    const vinFilter = {
+      $and: [
+        {
+          $gte: ["$entryDate", DATE.yesterday],
+        },
+        {
+          $eq: ["$$car.vin", vin],
+        },
+        {
+          $ne: [{ $ifNull: ["$$car.staffId", null] }, null],
+        },
+      ],
+    };
+
     const results = { $and: [] };
 
-    if (staffId) results.$and.push(staffFilter);
+    if (staffId && vin) {
+      results.$and.push(vinFilter);
+    } else if (staffId) {
+      results.$and.push(staffFilter);
+    }
 
     if (date === "today") {
       results.$and.push({
@@ -297,7 +325,8 @@ class EntryUtils {
     return results;
   }
   getFilterArguments = (req) => {
-    const { staffId, date, customerId, entryId, monthName, year } = req.params;
+    const { staffId, date, customerId, entryId, monthName, year, vin } =
+      req.params;
     const filterArguments = [entryId, staffId, customerId, date];
 
     let range;
@@ -312,8 +341,11 @@ class EntryUtils {
 
     if (range) {
       const { startDate, endDate } = range;
-      filterArguments.push(startDate, endDate);
+      filterArguments.push(startDate, endDate, vin);
+    } else {
+      filterArguments.push(undefined, undefined, vin);
     }
+
     return filterArguments;
   };
   getDateRange({ type, year, month, date }) {

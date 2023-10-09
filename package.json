@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "nodemon src/app.js",
+    "start": "nodemon test.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -37,10 +37,10 @@
     "redis": "^4.6.8",
     "request": "2.88.0",
     "request-debug": "0.2.0",
+    "stripe": "^13.9.0",
     "underscore": "1.12.1",
     "util": "0.10.3",
     "uuid": "^8.3.2",
     "xml2js": "^0.6.2"
   }
-
 }

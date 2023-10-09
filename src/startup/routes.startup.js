@@ -18,6 +18,7 @@ const path = require("path");
 const forms = require("../routes/form.routes");
 const oauth2 = require("../routes/oauth2.routes");
 const webhook = require("../routes/webhook.routes");
+const stripe = require("../routes/stripe.routes");
 const session = require("./session.startup");
 
 const { localEndpoint } = process.env;
@@ -25,12 +26,18 @@ const { localEndpoint } = process.env;
 module.exports = function (app) {
   app.use(cors());
   app.use(express.static(path.join(__dirname, "")));
-  app.use(express.urlencoded({ extended: false }));
+  app.use(express.urlencoded({ extended: true }));
   app.set("views", "views");
-  app.use(express.json());
+  app.use((req, res, next) => {
+    if (req.originalUrl === "/api/v1/webhook/stripe") {
+      next();
+    } else {
+      express.json()(req, res, next);
+    }
+  });
   app.use(cookieParser("brad"));
-  app.use(bodyParser.json());
-  app.use(bodyParser.urlencoded({ extended: true }));
+  // app.use(bodyParser.json());
+  // app.use(bodyParser.urlencoded({ extended: true }));
   app.use(session());
 
   app.use(`${localEndpoint}/auth`, auth);
@@ -44,6 +51,7 @@ module.exports = function (app) {
   app.use(`${localEndpoint}/logout`, logout);
   app.use(`${localEndpoint}/oauth2`, oauth2);
   app.use(`${localEndpoint}/webhook`, webhook);
+  app.use(`${localEndpoint}/stripe`, stripe);
   app.use(`${localEndpoint}/services`, services);
 
   // it calls the error middleware if there was a rejected promise.

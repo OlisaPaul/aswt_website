@@ -5,6 +5,7 @@ const { getOrSetCache, updateCache } = require("../utils/getOrSetCache.utils");
 const customerService = require("../services/customer.service");
 const initializeQbUtils = require("../utils/initializeQb.utils");
 const errorChecker = require("../utils/paginationErrorChecker.utils");
+const { register } = require("../controllers/user.controllers");
 
 const expires = 1800;
 
@@ -79,14 +80,15 @@ class Customer {
 
   async createCustomer(req, res) {
     const qbo = await initializeQbUtils();
-
+    const { DisplayName, PrimaryEmailAddr, PrimaryPhone, BillAddr, Notes } =
+      req.body;
     // Create the customer in QuickBooks
     const customerData = {
-      DisplayName: req.body.DisplayName,
-      PrimaryEmailAddr: req.body.PrimaryEmailAddr,
-      PrimaryPhone: req.body.PrimaryPhone,
-      BillAddr: req.body.BillAddr,
-      Notes: req.body.Notes,
+      DisplayName: DisplayName,
+      PrimaryEmailAddr: PrimaryEmailAddr,
+      PrimaryPhone: PrimaryPhone,
+      BillAddr: BillAddr,
+      Notes: Notes,
       CompanyName: req.body.CompanyName,
     };
 
@@ -96,16 +98,31 @@ class Customer {
     );
     const id = createdCustomer.Id;
 
+    const nameArray = DisplayName.split(" ");
+
+    const [firstName, lastName] =
+      nameArray.length === 1 ? [nameArray[0], nameArray[0]] : nameArray;
+
+    req.body = {
+      ...req.body,
+      firstName,
+      lastName,
+      email: PrimaryEmailAddr.Address,
+      role: "customer",
+      customerDetails: {
+        qbId: id,
+        companyName: req.body.CompanyName,
+      },
+    };
+
     // Fetch all customers and update the cache
     const customers = await customerService.fetchAllCustomers(qbo);
 
     updateCache(`customers?Id=${id}`, expires, createdCustomer);
     updateCache(`customers`, expires, customers);
 
+    await register(req, res, createdCustomer);
     // Send a success response
-    return res
-      .status(200)
-      .json(successMessage("Customer created", createdCustomer));
   }
 }
 

@@ -1,4 +1,5 @@
 require("dotenv").config();
+const stripe = require("stripe")(process.env.stripeSecretKey);
 var express = require("express");
 var crypto = require("crypto");
 const customerService = require("../services/customer.service");
@@ -61,6 +62,70 @@ class WebhookControllers {
     }
     return res.status(401).send("FORBIDDEN");
   }
+  stripeWebHook = async (req, res) => {
+    const signature = req.headers["stripe-signature"];
+
+    try {
+      const event = stripe.webhooks.constructEvent(
+        req.body,
+        signature,
+        process.env.stripeWebhookSecret
+      );
+
+      let paymentIntentId;
+
+      // Successfully constructed event
+      console.log("✅ Success:", event.id);
+
+      // Cast event data to Stripe object
+      if (event.type === "payment_intent.succeeded") {
+        const intent = event.data.object;
+
+        if (intent.status === "succeeded") {
+          const centToUsd = 100;
+          const amount = intent.amount_received / centToUsd;
+          const currency = intent.currency;
+          const entryId = intent.metadata.entryId;
+          const paymentDate = new Date();
+
+          if (entryId) {
+            await entryServices.updateEntryPaymentDetails({
+              entryId,
+              amount,
+              currency,
+              paymentDate,
+            });
+          }
+
+          // const charge = intent.charges.data;
+          // console.log(charge);
+
+          console.log(amount, currency, entryId, paymentDate);
+        }
+      } else if (event.type === "charge.succeeded") {
+        const charge = event.data.object;
+        // console.log(`Charge: ${charge.payment_intent}`);
+      } else if (event.type === "checkout.session.completed") {
+        const checkout = event.data.object;
+        // if (checkout.payment_status === "paid") {
+        //   await entryServices.updateEntryPaymentDetails({
+        //     entryId,
+        //     amount,
+        //     currency,
+        //     paymentDate,
+        //   });
+        // }
+      } else {
+        console.warn(`🤷‍♀️ Unhandled event type: ${event.type}`);
+      }
+
+      // Return a response to acknowledge receipt of the event
+      res.json({ received: true });
+    } catch (err) {
+      console.log(err);
+      res.status(400).send(`Webhook error: ${err.message}`);
+    }
+  };
 }
 
 module.exports = new WebhookControllers();

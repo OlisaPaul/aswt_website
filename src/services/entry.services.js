@@ -8,11 +8,6 @@ const { pipeline, getDateRange } = require("../utils/entry.utils");
 const { validMonthNames } = require("../common/constants.common");
 
 class EntryService {
-  //Create new entry
-  async createEntry(entry) {
-    return await entry.save();
-  }
-
   getEntries = async (args = { entryId: undefined, customerId: undefined }) => {
     const { entryId, customerId } = args;
 
@@ -43,10 +38,11 @@ class EntryService {
     customerId,
     date,
     startDate,
-    endDate
+    endDate,
+    vin
   ) => {
     return Entry.aggregate(
-      pipeline({ entryId, staffId, customerId, date, startDate, endDate })
+      pipeline({ entryId, staffId, customerId, date, startDate, endDate, vin })
     );
   };
 
@@ -71,27 +67,19 @@ class EntryService {
     });
   }
 
-  updateEntryInvoicePaymentDetails = async (apiEndpoint) => {
-    const { customerId, currency, invoiceId, paymentDate, amount } =
-      await this.getEntryPayMentDetails(apiEndpoint);
+  getServiceAndEntry = async (carDetails, customerId, customer) => {
+    const results = {};
 
-    const entry = await this.getEntryForCustomerWithQboId(
-      customerId,
-      invoiceId
-    );
+    const serviceIds = carDetails.serviceIds;
 
-    if (!entry) return;
+    [results.services, results.entry] = await Promise.all([
+      serviceServices.getMultipleServices(serviceIds),
+      (await this.getEntryForCustomerLast24Hours(customerId))
+        ? this.getEntryForCustomerLast24Hours(customerId)
+        : this.createNewEntry(customer),
+    ]);
 
-    entry.invoice.paymentDetails.paymentDate = paymentDate;
-    entry.invoice.paymentDetails.currency = currency;
-
-    const totalAmountPaid = entry.invoice.paymentDetails.amountPaid + amount;
-    entry.invoice.paymentDetails.amountPaid = totalAmountPaid;
-
-    const amountDue = entry.invoice.totalPrice - totalAmountPaid;
-    entry.invoice.paymentDetails.amountDue = amountDue;
-
-    return await this.updateEntryById(entry._id, entry);
+    return results;
   };
 
   async getEntryForCustomerWithQboId(customerId, qbId) {
@@ -132,58 +120,6 @@ class EntryService {
       return { invoiceId, invoiceNumber };
     }
   }
-
-  createNewEntry = async (customer) => {
-    const customerId = customer.Id;
-    const customerName = customer.FullyQualifiedName;
-    const customerEmail = customer.PrimaryEmailAddr.Address;
-
-    let entry = new Entry({
-      customerId,
-      customerName,
-      customerEmail,
-      entryDate: new Date(),
-      isActive: true,
-    });
-
-    const invoiceNumber = await Entry.getNextInvoiceNumber();
-    entry.invoice.name = invoiceNumber;
-
-    entry = await this.createEntry(entry);
-    entry.id = entry._id;
-
-    return entry;
-  };
-
-  async checkDuplicateEntry(customerId, vin) {
-    return await Entry.findOne({
-      $and: [
-        { customerId },
-        { "invoice.carDetails.vin": vin },
-        {
-          entryDate: {
-            $gte: DATE.yesterday,
-          },
-        },
-      ],
-    });
-  }
-
-  getServiceAndEntry = async (carDetails, customerId, customer) => {
-    const results = {};
-
-    const serviceIds = carDetails.serviceIds;
-
-    [results.services, results.entry] = await Promise.all([
-      serviceServices.getMultipleServices(serviceIds),
-      (await this.getEntryForCustomerLast24Hours(customerId))
-        ? this.getEntryForCustomerLast24Hours(customerId)
-        : this.createNewEntry(customer),
-    ]);
-
-    return results;
-  };
-
   getTotalprice(invoice) {
     invoice.totalPrice = 0;
 
@@ -304,6 +240,18 @@ class EntryService {
     return { carIndex, carDoneByStaff };
   }
 
+  getCarAddedByCustomer(entry, vin) {
+    const { carDetails } = entry.invoice;
+
+    const carIndex = carDetails.findIndex((car) => {
+      return car.vin.toString() === vin.toString();
+    });
+
+    const carAddedByCustomer = carDetails[carIndex];
+
+    return { carIndex, carAddedByCustomer };
+  }
+
   getCarByVin({ entry, vin }) {
     const { carDetails } = entry.invoice;
 
@@ -325,6 +273,87 @@ class EntryService {
 
     return { servicePrice, servicePriceIndex };
   }
+  //Create new entry
+  async createEntry(entry) {
+    return await entry.save();
+  }
+
+  createNewEntry = async (customer, numberOfVehicles) => {
+    const customerId = customer.Id;
+    const customerName = customer.FullyQualifiedName;
+    const customerEmail = customer.PrimaryEmailAddr.Address;
+
+    let entry = new Entry({
+      customerId,
+      customerName,
+      customerEmail,
+      isActive: true,
+      numberOfVehicles,
+    });
+
+    const invoiceNumber = await Entry.getNextInvoiceNumber();
+    entry.invoice.name = invoiceNumber;
+
+    entry = await this.createEntry(entry);
+    entry.id = entry._id;
+
+    return entry;
+  };
+
+  updateEntryInvoicePaymentDetails = async (apiEndpoint) => {
+    const { customerId, currency, invoiceId, paymentDate, amount } =
+      await this.getEntryPayMentDetails(apiEndpoint);
+
+    const entry = await this.getEntryForCustomerWithQboId(
+      customerId,
+      invoiceId
+    );
+
+    if (!entry) return;
+
+    entry.invoice.paymentDetails.paymentDate = paymentDate;
+    entry.invoice.paymentDetails.currency = currency;
+
+    const totalAmountPaid = entry.invoice.paymentDetails.amountPaid + amount;
+    entry.invoice.paymentDetails.amountPaid = totalAmountPaid;
+
+    const amountDue = entry.invoice.totalPrice - totalAmountPaid;
+    entry.invoice.paymentDetails.amountDue = amountDue;
+
+    return await this.updateEntryById(entry._id, entry);
+  };
+
+  updateEntryPaymentDetails = async ({
+    entryId,
+    currency,
+    paymentDate,
+    amount,
+  }) => {
+    const [entry] = await this.getEntries({ entryId });
+
+    if (!entry) return;
+
+    entry.invoice.paymentDetails.paymentDate = paymentDate;
+    entry.invoice.paymentDetails.currency = currency;
+
+    const totalAmountPaid = entry.invoice.paymentDetails.amountPaid + amount;
+    entry.invoice.paymentDetails.amountPaid = totalAmountPaid;
+
+    const amountDue = entry.invoice.totalPrice - totalAmountPaid;
+    entry.invoice.paymentDetails.amountDue = amountDue;
+
+    return await this.updateEntryById(entry._id, entry);
+  };
+
+  async updateEntryById(id, entry, session) {
+    return await Entry.findByIdAndUpdate(
+      id,
+      {
+        $set: entry,
+      },
+      { session }
+    );
+  }
 
   updateCarProperties(req, carDoneByStaff) {
     if (req.body.category) {
@@ -338,6 +367,56 @@ class EntryService {
     }
 
     if (req.body.note) carDoneByStaff["note"] = req.body.note;
+  }
+
+  async checkDuplicateEntry(customerId, vin) {
+    return await Entry.findOne({
+      $and: [
+        { customerId },
+        { "invoice.carDetails.vin": vin },
+        {
+          entryDate: {
+            $gte: DATE.yesterday,
+          },
+        },
+      ],
+    });
+  }
+
+  calculateServicePriceDoneforCar(priceBreakdown) {
+    const price = priceBreakdown.reduce((acc, curr) => {
+      return acc + curr.price;
+    }, 0);
+
+    return price;
+  }
+
+  async modifyPrice({ entryId, vin, priceBreakdown, totalPrice }) {
+    return await Entry.updateOne(
+      {
+        _id: entryId, // entry document id
+        "invoice.carDetails.vin": vin,
+      },
+      {
+        $set: {
+          "invoice.carDetails.$.priceBreakdown": priceBreakdown, // new price
+          "invoice.carDetails.$.price": price, // new price
+          "invoice.totalPrice": totalPrice,
+        },
+      },
+      { new: true }
+    );
+  }
+
+  async addCarDetail(entryId, carDetail) {
+    return await Entry.findOneAndUpdate(
+      { _id: entryId },
+      {
+        $push: { "invoice.carDetails": carDetail },
+        $inc: { numberOfCarsAdded: 1 },
+      },
+      { new: true }
+    );
   }
 
   recalculatePrices = (req, entry, services, carDoneByStaff) => {
@@ -388,13 +467,36 @@ class EntryService {
     return errorResult;
   }
 
-  updateCarDetails = (entry, carDetails, price, priceBreakdown, staffId) => {
+  updateCarDetails = (
+    entry,
+    carDetails,
+    price,
+    priceBreakdown,
+    staffId,
+    carExist
+  ) => {
     carDetails.price = price;
     carDetails.category = carDetails.category.toLowerCase();
     carDetails.staffId = staffId;
     carDetails.priceBreakdown = priceBreakdown;
 
-    entry.invoice.carDetails.push(carDetails);
+    if (carExist) {
+      const { carIndex, carAddedByCustomer } = this.getCarAddedByCustomer(
+        entry,
+        carDetails.vin
+      );
+
+      console.log("Car Exist");
+      const combinedCardetail = this.mergeCarObjects(
+        carAddedByCustomer,
+        carDetails
+      );
+
+      entry.invoice.carDetails[carIndex] = combinedCardetail;
+    } else {
+      entry.invoice.carDetails.push(carDetails);
+    }
+
     entry.invoice.totalPrice = this.getTotalprice(entry.invoice);
     entry.numberOfCarsAdded = this.getNumberOfCarsAdded(
       entry.invoice.carDetails
@@ -402,6 +504,34 @@ class EntryService {
 
     return entry;
   };
+
+  mergeCarObjects(carAddedByCustomer, carAddedByStaff) {
+    // Create a new object to store the merged result
+    const mergedCar = {};
+
+    // Iterate through properties in carAddedByCustomer
+    for (const key in carAddedByCustomer) {
+      // Check if the property exists in carAddedByStaff
+      if (carAddedByStaff.hasOwnProperty(key)) {
+        // Use the value from carAddedByStaff in case of conflict
+        mergedCar[key] = carAddedByStaff[key];
+      } else {
+        // Use the value from carAddedByCustomer if not in carAddedByStaff
+        mergedCar[key] = carAddedByCustomer[key];
+      }
+    }
+
+    // Iterate through properties in carAddedByStaff to include any additional properties
+    for (const key in carAddedByStaff) {
+      // Check if the property doesn't exist in the merged result
+      if (!mergedCar.hasOwnProperty(key)) {
+        // Include the property from carAddedByStaff
+        mergedCar[key] = carAddedByStaff[key];
+      }
+    }
+
+    return mergedCar;
+  }
 
   carWasAddedRecently = (car) => {
     const now = new Date();

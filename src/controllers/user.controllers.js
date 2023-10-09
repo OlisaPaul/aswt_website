@@ -21,7 +21,7 @@ class UserController {
   }
 
   //Create a new user
-  async register(req, res) {
+  async register(req, res, customer) {
     const { departments, email, role } = req.body;
     const { createUserWithAvatar } = userService;
 
@@ -50,6 +50,7 @@ class UserController {
 
     const userWithAvatar = await createUserWithAvatar(req, user, departments);
 
+    if (customer) return res.send(successMessage(MESSAGES.CREATED, customer));
     res
       .header("x-auth-header", userWithAvatar.token)
       .header("access-control-expose-headers", "x-auth-token")

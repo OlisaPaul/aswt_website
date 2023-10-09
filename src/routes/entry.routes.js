@@ -14,6 +14,7 @@ const staffMiddleware = require("../middleware/staff.middleware");
 const {
   validate,
   validatePatch,
+  validateAddVin,
   validateAddInvoicePatch,
   validateModifyPrice,
   validateModifyCarDetails,
@@ -123,6 +124,12 @@ router.put(
   "/add-car/:id",
   [auth, staffMiddleware, validateMiddleware(validateAddInvoicePatch)],
   qboAsyncMiddleware(entryController.addInvoice)
+);
+
+router.put(
+  "/add-vin/:id",
+  [validateMiddleware(validateAddVin)],
+  qboAsyncMiddleware(entryController.addVin)
 );
 
 router.put(

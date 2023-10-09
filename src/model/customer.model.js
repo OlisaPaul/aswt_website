@@ -19,6 +19,7 @@ function validate(customer) {
     }).required(),
     CompanyName: Joi.string().min(3).max(255).required(),
     Notes: Joi.string(),
+    password: Joi.string(),
   });
 
   return schema.validate(customer);

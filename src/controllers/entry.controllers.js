@@ -12,6 +12,7 @@ const {
   successMessage,
   jsonResponse,
   notFoundResponse,
+  badReqResponse,
 } = require("../common/messages.common");
 const { default: mongoose } = require("mongoose");
 const mongoTransactionUtils = require("../utils/mongoTransaction.utils");
@@ -25,25 +26,47 @@ class EntryController {
   async createEntry(req, res) {
     const { customerId, numberOfVehicles } = req.body;
 
-    const [customer] = await userService.getUserByRoleAndId(
-      customerId,
-      "customer"
-    );
+    const { data: customer, error } =
+      await customerService.getOrSetCustomerOnCache(customerId);
+    if (error)
+      return jsonResponse(res, 404, false, error.Fault.Error[0].Detail);
 
-    if (!customer) return res.status(404).send(errorMessage("customer"));
+    const isEntryAddedWithin24Hrs =
+      await entryService.getEntryForCustomerLast24Hours(customerId);
 
-    let entry = new Entry({
-      customerId,
-      numberOfVehicles,
-      entryDate: new Date(),
-      vehiclesLeft: numberOfVehicles,
-    });
+    if (isEntryAddedWithin24Hrs)
+      return jsonResponse(
+        res,
+        403,
+        false,
+        "You cannot create multiple entries within 24 hours."
+      );
 
-    const invoiceNumber = await Entry.getNextInvoiceNumber();
-    entry.invoice.name = invoiceNumber;
+    const entry = await entryService.createNewEntry(customer, numberOfVehicles);
 
-    entry = await entryService.createEntry(entry);
-    entry.id = entry._id;
+    res.send(successMessage(MESSAGES.CREATED, entry));
+  }
+
+  async addVin(req, res) {
+    const { id: customerId } = req.params;
+    const { carDetails } = req.body;
+    const { vin } = carDetails;
+
+    const { data: customer, error } =
+      await customerService.getOrSetCustomerOnCache(customerId);
+    if (error)
+      return jsonResponse(res, 404, false, error.Fault.Error[0].Detail);
+
+    let [entry, isVinAdded] = await Promise.all([
+      (await entryService.getEntryForCustomerLast24Hours(customerId))
+        ? await entryService.getEntryForCustomerLast24Hours(customerId)
+        : await entryService.createNewEntry(customer),
+      entryService.checkDuplicateEntry(customerId, vin),
+    ]);
+
+    if (isVinAdded) return badReqResponse(res, "Duplicate Entry");
+
+    entry = await entryService.addCarDetail(entry._id, carDetails);
 
     res.send(successMessage(MESSAGES.CREATED, entry));
   }
@@ -60,12 +83,22 @@ class EntryController {
 
     carDetails.serviceIds = [...new Set(serviceIds)];
 
-    let [isCarServiceAdded, { services, entry }, missingIds] =
+    req.params = {
+      ...req.params,
+      vin,
+      staffId: req.user._id,
+    };
+
+    const filterArguments = getFilterArguments(req);
+
+    let [[isCarServiceAdded], carExist, { services, entry }, missingIds] =
       await Promise.all([
+        entryService.getCarsDoneByStaff(...filterArguments),
         entryService.checkDuplicateEntry(customerId, vin),
         entryService.getServiceAndEntry(carDetails, customerId, customer),
         serviceService.validateServiceIds(serviceIds),
       ]);
+    console.log(isCarServiceAdded);
 
     if (Array.isArray(entry)) entry = entry[0];
 
@@ -91,7 +124,8 @@ class EntryController {
       carDetails,
       price,
       priceBreakdown,
-      staffId
+      staffId,
+      carExist
     );
 
     const mongoSession = await mongoose.startSession();
