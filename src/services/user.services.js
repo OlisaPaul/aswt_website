@@ -17,6 +17,21 @@ class UserService {
     return await user.save();
   }
 
+  async validateUserIds(userIds) {
+    if (userIds) {
+      const users = await User.find({
+        _id: { $in: userIds },
+      });
+
+      const foundIds = users.map((d) => d._id.toString());
+
+      const missingIds = userIds.filter((id) => !foundIds.includes(id));
+
+      return missingIds;
+    }
+    return [];
+  }
+
   createUserWithAvatar = async (req, user, departments) => {
     const { body } = req;
     if (body.role === "staff") propertiesToPick.push("staffDetails");

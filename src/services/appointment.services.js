@@ -3,14 +3,17 @@ const { Appointment } = require("../model/appointment.model");
 class AppointmentService {
   //Create new appointment
   async createAppointment({
-    staff,
+    staffId,
     customerEmail,
     startTime,
     endTime,
     description,
   }) {
+    startTime = new Date(startTime);
+    endTime = new Date(endTime);
+
     const appointment = new Appointment({
-      staff,
+      staffId,
       customerEmail,
       endTime,
       startTime,
@@ -25,8 +28,11 @@ class AppointmentService {
   }
 
   getOverlappingAppointments = async ({ staffIds, startTime, endTime }) => {
+    endTime = new Date(endTime);
+    startTime = new Date(startTime);
+
     const overlappingAppointments = await Appointment.find({
-      staff: { $in: staffIds },
+      staffId: { $in: staffIds },
       startTime: { $lt: endTime },
       endTime: { $gt: startTime },
     });
@@ -49,30 +55,31 @@ class AppointmentService {
 
   getAvailableTimeSlots({ allAppointments, startTime, endTime }) {
     const availableTimeSlots = [];
-    let currentFreeSlot = { startTime };
+    let isInsideAppointment = false;
+    let currentSlotStart = startTime;
 
     for (const event of allAppointments) {
       if (event.isStart) {
-        // If the current free slot has a duration, add it to the available time slots
-        if (currentFreeSlot.endTime) {
+        if (!isInsideAppointment) {
+          // Start of a new appointment, add available time slot
           availableTimeSlots.push({
-            startTime: currentFreeSlot.startTime,
+            startTime: currentSlotStart,
             endTime: event.time,
           });
         }
-        // Update the current free slot start time
-        currentFreeSlot.startTime = event.time;
-        currentFreeSlot.endTime = null;
+        // Update currentSlotStart for the next available time slot
+        currentSlotStart = event.time;
+        isInsideAppointment = true;
       } else {
-        // Update the current free slot end time
-        currentFreeSlot.endTime = event.time;
+        // End of the current appointment, update isInsideAppointment flag
+        isInsideAppointment = false;
       }
     }
 
     // If there's a remaining free slot at the end of the day, add it
-    if (currentFreeSlot.endTime === null) {
+    if (currentSlotStart < endTime && !isInsideAppointment) {
       availableTimeSlots.push({
-        startTime: currentFreeSlot.startTime,
+        startTime: currentSlotStart,
         endTime,
       });
     }
@@ -96,9 +103,9 @@ class AppointmentService {
     return await Appointment.findOne({ entryId, staffId });
   }
 
-  async getAllAppointments() {
-    return await Appointment.find().sort({ _id: -1 });
-  }
+  // async getAllAppointments() {
+  //   return await Appointment.find().sort({ _id: -1 });
+  // }
 
   async updateAppointmentById(id, appointment) {
     return await Appointment.findByIdAndUpdate(

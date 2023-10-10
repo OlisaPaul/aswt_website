@@ -19,7 +19,7 @@ const appointmentSchema = new mongoose.Schema({
     type: String,
     ref: User,
   },
-  staff: {
+  staffId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: User,
     required: true,
@@ -49,8 +49,19 @@ const Appointment = mongoose.model("Appointment", appointmentSchema);
 
 function validate(appointment) {
   const schema = Joi.object({
-    customerEmail: Joi.email().required(),
-    staff: Joi.objectId().required(),
+    customerEmail: Joi.string().email().required(),
+    staffId: Joi.objectId().required(),
+    startTime: Joi.date().required(),
+    endTime: Joi.date().required(),
+    description: Joi.string().max(255).min(3),
+  });
+
+  return schema.validate(appointment);
+}
+
+function validateAvailableTimeSlot(appointment) {
+  const schema = Joi.object({
+    staffIds: Joi.array().items(Joi.objectId().required()),
     startTime: Joi.date().required(),
     endTime: Joi.date().required(),
     description: Joi.string().max(255).min(3),
@@ -60,4 +71,5 @@ function validate(appointment) {
 }
 
 exports.validate = validate;
+exports.validateAvailableTimeSlot = validateAvailableTimeSlot;
 exports.Appointment = Appointment;
