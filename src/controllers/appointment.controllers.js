@@ -1,6 +1,5 @@
 const appointmentService = require("../services/appointment.services");
 const userService = require("../services/user.services");
-const serviceService = require("../services/service.services");
 const {
   errorMessage,
   successMessage,
@@ -24,6 +23,18 @@ class AppointmentController {
     const startTimeInDecimal = freeTimeSlotServices.convertTimetoDecimal({
       timeString,
     });
+
+    let staffIds = await userService.fetchIdsOfStaffsWhoCanTakeAppointments();
+    if (staffIds.length > 0) {
+      staffIds = staffIds.map((staffId) => staffId.toString());
+    } else {
+      return jsonResponse(
+        res,
+        404,
+        false,
+        "No staff is available to take apointments"
+      );
+    }
 
     const availableTimeSlots =
       await freeTimeSlotControllers.generateFreeTimeSlots({

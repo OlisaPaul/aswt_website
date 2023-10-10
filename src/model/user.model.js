@@ -24,6 +24,10 @@ const staffDetailsSchema = new mongoose.Schema({
       },
     },
   ],
+  isAvailableForAppointments: {
+    type: Boolean,
+    default: false,
+  },
   earningRate: {
     type: Number,
     min: 1,

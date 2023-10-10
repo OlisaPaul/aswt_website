@@ -34,19 +34,22 @@ class FreeTimeSlotController {
   }
 
   getFreeTimeSlots = async (req, res) => {
-    let { staffIds, date } = req.body;
+    let { date } = req.body;
     const { formattedDate } = freeTimeSlotService.getFormattedDate(date);
-    const invalidIds = await userService.validateUserIds(staffIds);
 
-    date = formattedDate;
-
-    if (invalidIds.length > 0)
+    let staffIds = await userService.fetchIdsOfStaffsWhoCanTakeAppointments();
+    if (staffIds.length > 0) {
+      staffIds = staffIds.map((staffId) => staffId.toString());
+    } else {
       return jsonResponse(
         res,
-        400,
+        404,
         false,
-        MESSAGES.INVALID(invalidIds, "users")
+        "No staff is available to take apointments"
       );
+    }
+
+    date = formattedDate;
 
     const uniqueTimeSlots = await this.generateFreeTimeSlots({
       staffIds,

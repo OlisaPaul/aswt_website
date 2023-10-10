@@ -28,6 +28,7 @@ class FreeTimeSlotService {
   }
 
   getTimeSlotDocuments({ staffIds, date }) {
+    console.log(staffIds);
     const timeSlotDocuments = [];
 
     staffIds.forEach((staffId) => {

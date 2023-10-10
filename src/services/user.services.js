@@ -32,6 +32,14 @@ class UserService {
     return [];
   }
 
+  async fetchIdsOfStaffsWhoCanTakeAppointments() {
+    const staffsWhoCanTakeAppointments = await User.find({
+      "staffDetails.isAvailableForAppointments": true,
+    });
+
+    return staffsWhoCanTakeAppointments.map((staff) => staff._id);
+  }
+
   createUserWithAvatar = async (req, user, departments) => {
     const { body } = req;
     if (body.role === "staff") propertiesToPick.push("staffDetails");
