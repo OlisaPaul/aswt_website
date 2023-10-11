@@ -252,6 +252,48 @@ class EntryUtils {
     return invoice;
   }
 
+  pipelineForCustomerIdAndVin = ({ customerId, vin }) => {
+    const pipeline = [
+      {
+        $match: {
+          customerId: customerId,
+        },
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "invoice.carDetails.staffId",
+          foreignField: "_id",
+          as: "staff",
+        },
+      },
+      {
+        $project: {
+          ...this.entryUnFilteredProps,
+          invoice: {
+            name: 1,
+            "invoice.carDetails": {
+              $filter: {
+                input: "$invoice.carDetails",
+                as: "car",
+                cond: {
+                  $eq: ["$$car.vin", vin],
+                },
+              },
+            },
+          },
+        },
+      },
+      {
+        $match: {
+          "invoice.carDetails": { $ne: [] }, // filter out entries with empty carDetails array
+        },
+      },
+    ];
+
+    return pipeline;
+  };
+
   filteredDetails = ({ staffId, date, startDate, endDate, vin }) => {
     return {
       $filter: {

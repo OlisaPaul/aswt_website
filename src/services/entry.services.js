@@ -4,7 +4,10 @@ const serviceServices = require("./service.services");
 const { DATE, errorMessage } = require("../common/constants.common");
 const { getNewAccessToken } = require("../utils/getNewAccessToken.utils");
 const getWebhookDataUtils = require("../utils/getWebhookData.utils");
-const { pipeline, getDateRange } = require("../utils/entry.utils");
+const {
+  pipeline,
+  pipelineForCustomerIdAndVin,
+} = require("../utils/entry.utils");
 const { validMonthNames } = require("../common/constants.common");
 
 class EntryService {
@@ -42,7 +45,15 @@ class EntryService {
     vin
   ) => {
     return Entry.aggregate(
-      pipeline({ entryId, staffId, customerId, date, startDate, endDate, vin })
+      pipelineForCustomerIdAndVin({
+        entryId,
+        staffId,
+        customerId,
+        date,
+        startDate,
+        endDate,
+        vin,
+      })
     );
   };
 

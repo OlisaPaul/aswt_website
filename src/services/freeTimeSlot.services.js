@@ -153,6 +153,9 @@ class FreeTimeSlotService {
       const hours = Math.floor(decimalTime);
       const minutes = Math.round((decimalTime - hours) * 60);
       const formattedTime = `${hours}:${minutes < 10 ? "0" : ""}${minutes}`;
+
+      if (formattedTime === "9:00") formattedTime = "09:00";
+
       return formattedTime;
     });
 

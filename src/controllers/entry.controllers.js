@@ -312,6 +312,19 @@ class EntryController {
     res.send(successMessage(MESSAGES.FETCHED, staffEntries));
   }
 
+  async getCarsDoneForCustomer(req, res) {
+    const { customerId } = req.params;
+    const filterArguments = getFilterArguments(req);
+
+    console.log(filterArguments);
+
+    const carsDoneForCustomer = await entryService.getCarsDoneByStaff(
+      ...filterArguments
+    );
+
+    res.send(successMessage(MESSAGES.FETCHED, carsDoneForCustomer));
+  }
+
   //Update/edit entry data
   async updateEntry(req, res) {
     const [entry] = await entryService.getEntries({ entryId: req.params.id });

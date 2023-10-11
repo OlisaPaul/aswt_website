@@ -50,7 +50,6 @@ const Appointment = mongoose.model("Appointment", appointmentSchema);
 function validate(appointment) {
   const schema = Joi.object({
     customerEmail: Joi.string().email().required(),
-    staffId: Joi.objectId().required(),
     startTime: Joi.date().required(),
     endTime: Joi.date().required(),
     description: Joi.string().max(255).min(3),

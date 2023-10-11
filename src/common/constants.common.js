@@ -93,7 +93,7 @@ const constants = {
   ],
   FREE_TIME_SLOTS: {
     VALID_TIME_SLOTS: [
-      "9:00",
+      "09:00",
       "10:00",
       "11:00",
       "12:00",
