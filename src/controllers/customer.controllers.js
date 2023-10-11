@@ -1,11 +1,20 @@
 require("dotenv").config();
+const _ = require("lodash");
 const { MESSAGES } = require("../common/constants.common");
-const { successMessage, jsonResponse } = require("../common/messages.common");
 const { getOrSetCache, updateCache } = require("../utils/getOrSetCache.utils");
 const customerService = require("../services/customer.service");
 const initializeQbUtils = require("../utils/initializeQb.utils");
 const errorChecker = require("../utils/paginationErrorChecker.utils");
 const { register } = require("../controllers/user.controllers");
+const userServices = require("../services/user.services");
+const propertiesToPick = require("../common/propertiesToPick.common");
+const { transporter, mailOptions } = require("../utils/email.utils");
+const jwt = require("jsonwebtoken");
+const {
+  successMessage,
+  jsonResponse,
+  errorMessage,
+} = require("../common/messages.common");
 
 const expires = 1800;
 
@@ -78,6 +87,56 @@ class Customer {
     return res.send(successMessage(MESSAGES.FETCHED, customer));
   }
 
+  async updateCustomerById(req, res) {
+    const { DisplayName, PrimaryEmailAddr } = req.body;
+
+    const id = req.params.id;
+    const qbo = await initializeQbUtils();
+
+    const { data: customer, error } =
+      await customerService.getOrSetCustomerOnCache(id);
+
+    if (error)
+      return jsonResponse(res, 404, false, error.Fault.Error[0].Detail);
+
+    const { Id, SyncToken } = customer;
+
+    console.log(req.body);
+
+    const updatedCustomer = await customerService.updateCustomerById(
+      qbo,
+      Id,
+      req.body,
+      SyncToken
+    );
+
+    let firstName, lastName;
+
+    const nameArray = DisplayName ? DisplayName.split(" ") : undefined;
+
+    if (nameArray)
+      [firstName, lastName] =
+        nameArray.length === 1 ? [nameArray[0], nameArray[0]] : nameArray;
+
+    req.body = {
+      firstName,
+      lastName,
+      customerDetails: {
+        companyName: req.body.CompanyName,
+      },
+    };
+
+    await userServices.updateCustomerByQbId(Id, req.body);
+
+    // Fetch all customers and update the cache
+    const customers = await customerService.fetchAllCustomers(qbo);
+
+    updateCache(`customers?Id=${id}`, expires, updatedCustomer);
+    updateCache(`customers`, expires, customers);
+
+    return res.send(successMessage(MESSAGES.FETCHED, updatedCustomer));
+  }
+
   async createCustomer(req, res) {
     const qbo = await initializeQbUtils();
     const { DisplayName, PrimaryEmailAddr, PrimaryPhone, BillAddr, Notes } =
@@ -123,6 +182,62 @@ class Customer {
 
     await register(req, res, createdCustomer);
     // Send a success response
+  }
+
+  sendRegistrationLink(req, res) {
+    const { email, name } = req.body;
+
+    const emailIntro = process.env.emailIntro;
+
+    const token = jwt.sign(
+      { customerCanCreate: true },
+      process.env.jwtPrivateKey,
+      {
+        expiresIn: "1h",
+      }
+    );
+
+    const baseUrl = process.env.clientUrl;
+    const subject = "Register your account";
+    const emailLink = (token) => `${baseUrl}/?token=${token}`;
+    const buttonInstructions = "Click this link to create your account:";
+    const buttonText = "Click Link to Register";
+
+    transporter.sendMail(
+      mailOptions(
+        email,
+        name,
+        token,
+        subject,
+        emailIntro,
+        emailLink,
+        buttonInstructions,
+        buttonText
+      ),
+      (error, info) => {
+        if (error) {
+          return "Error occurred:", error;
+        } else {
+          res.send({ message: "Email sent successfully", success: true });
+        }
+      }
+    );
+  }
+  //Delete user account entirely from the database
+  async deleteUserAccount(req, res) {
+    let user = await userServices.findCustomerByQbId(req.params.id);
+    if (!user) return res.status(404).send(errorMessage("user"));
+
+    const id = user._id;
+
+    if (user.isAdmin)
+      return badReqResponse(res, "You can not delete an admin account");
+
+    await userServices.softDeleteUser(id);
+
+    user = _.pick(user, propertiesToPick);
+
+    res.send(successMessage(MESSAGES.DELETED, user));
   }
 }
 

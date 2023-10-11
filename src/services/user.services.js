@@ -163,6 +163,19 @@ class UserService {
       { new: true }
     );
   }
+  async updateCustomerByQbId(id, user) {
+    return await User.findOneAndUpdate(
+      { "customerDetails.qbId": id },
+      {
+        $set: user,
+      },
+      { new: true }
+    );
+  }
+
+  findCustomerByQbId(qbId) {
+    return User.findOne({ "customerDetails.qbId": qbId, isDeleted: undefined });
+  }
 
   async signInStaff(email, currentSignInLocation) {
     return User.findOneAndUpdate(
