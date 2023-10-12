@@ -406,6 +406,12 @@ class EntryUtils {
         endDate = new Date(Date.UTC(year, 12, 0));
         break;
 
+      case "day":
+        startDate = new Date(date);
+        endDate = new Date(date);
+        endDate.setHours(24, 59, 59, 999);
+        break;
+
       case "week":
         startDate = new Date(date);
         endDate = new Date(date);

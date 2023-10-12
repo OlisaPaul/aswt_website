@@ -37,7 +37,20 @@ class FreeTimeSlotController {
     let { date } = req.body;
     const { formattedDate } = freeTimeSlotService.getFormattedDate(date);
 
+    date = formattedDate;
+
+    const availableTimeSlots = await this.generateFreeTimeSlots({
+      res,
+      date,
+    });
+    if (availableTimeSlots.statusCode) return;
+
+    res.send(successMessage(MESSAGES.FETCHED, availableTimeSlots));
+  };
+
+  async generateFreeTimeSlots({ date, res }) {
     let staffIds = await userService.fetchIdsOfStaffsWhoCanTakeAppointments();
+
     if (staffIds.length > 0) {
       staffIds = staffIds.map((staffId) => staffId.toString());
     } else {
@@ -49,17 +62,6 @@ class FreeTimeSlotController {
       );
     }
 
-    date = formattedDate;
-
-    const uniqueTimeSlots = await this.generateFreeTimeSlots({
-      staffIds,
-      date,
-    });
-
-    res.send(successMessage(MESSAGES.FETCHED, uniqueTimeSlots));
-  };
-
-  async generateFreeTimeSlots({ staffIds, date }) {
     let freeTimeSlots = await freeTimeSlotService.fetchFreeTimeSlotsByDate({
       date,
     });
@@ -153,6 +155,37 @@ class FreeTimeSlotController {
     res.send(successMessage(MESSAGES.UPDATED, updatedFreeTimeSlot));
   }
 
+  async clearOutAppointment(req, res) {
+    const { date } = req.body;
+
+    let freeTimeSlots = await freeTimeSlotService.fetchFreeTimeSlotsByDate({
+      date,
+    });
+
+    if (freeTimeSlots.length < 1) {
+      let staffIds = await userService.fetchIdsOfStaffsWhoCanTakeAppointments();
+
+      const timeSlotDocuments = freeTimeSlotService.getTimeSlotDocuments({
+        staffIds,
+        date,
+        clearOut: true,
+      });
+
+      await freeTimeSlotService.addSlotsForStaff({
+        timeSlotDocuments,
+      });
+
+      return res.send(successMessage("Successfully cleared out date", null));
+    }
+
+    const { err, nModified } = await freeTimeSlotService.clearOutAppointment(
+      date
+    );
+
+    if (err) return jsonResponse(res, 500, false, "Something Failed");
+
+    res.send(successMessage("Successfully cleared out date", null));
+  }
   //Delete appointment account entirely from the database
   async deleteFreeTimeSlot(req, res) {
     const appointment = await appointmentService.getFreeTimeSlotById(

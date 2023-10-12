@@ -1,14 +1,18 @@
 const { Appointment } = require("../model/appointment.model");
+const entryUtils = require("../utils/entry.utils");
 
 class AppointmentService {
   //Create new appointment
-  async createAppointment({
-    staffId,
-    customerEmail,
-    startTime,
-    endTime,
-    description,
-  }) {
+  async createAppointment({ body, staffId }) {
+    let {
+      startTime,
+      endTime,
+      customerEmail,
+      description,
+      appointmentType,
+      dealershipCarDetails,
+    } = body;
+
     startTime = new Date(startTime);
     endTime = new Date(endTime);
 
@@ -18,6 +22,8 @@ class AppointmentService {
       endTime,
       startTime,
       description,
+      appointmentType,
+      dealershipCarDetails,
     });
 
     return await appointment.save();
@@ -25,6 +31,16 @@ class AppointmentService {
 
   async getAppointmentById(appointmentId) {
     return await Appointment.findById(appointmentId);
+  }
+
+  async getAppointmentByDate({ date }) {
+    const { endDate, startDate } = entryUtils.getDateRange({
+      type: "day",
+      date,
+    });
+    return Appointment.find({
+      startTime: { $gte: startDate, $lt: endDate },
+    });
   }
 
   getOverlappingAppointments = async ({ staffIds, startTime, endTime }) => {

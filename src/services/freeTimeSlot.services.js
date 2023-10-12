@@ -27,7 +27,7 @@ class FreeTimeSlotService {
     return results;
   }
 
-  getTimeSlotDocuments({ staffIds, date }) {
+  getTimeSlotDocuments({ staffIds, date, clearOut }) {
     console.log(staffIds);
     const timeSlotDocuments = [];
 
@@ -35,7 +35,7 @@ class FreeTimeSlotService {
       const timeSlotDocument = {
         date,
         staffId: new mongoose.Types.ObjectId(staffId),
-        timeSlots: VALID_TIME_SLOTS,
+        timeSlots: clearOut ? [] : VALID_TIME_SLOTS,
       };
       timeSlotDocuments.push(timeSlotDocument);
     });
@@ -95,6 +95,10 @@ class FreeTimeSlotService {
     );
   }
 
+  async clearOutAppointment(date) {
+    return FreeTimeSlot.updateMany({ date }, { $set: { timeSlots: [] } });
+  }
+
   getFormattedDate(date) {
     const dateObject = new Date(date);
 
@@ -124,13 +128,56 @@ class FreeTimeSlotService {
     const estimatedFreeTime =
       startTimeInDecimal + COMPLETION_TIME_HOURS - TIME_OFFSET;
 
+    const estimatedBusyTime =
+      startTimeInDecimal - COMPLETION_TIME_HOURS + TIME_OFFSET;
+
     const freeTimeSlots = timeSlotsGreaterThanCompletionTime.filter(
-      (timeSlot) => timeSlot > estimatedFreeTime
+      (timeSlot) => {
+        if (timeSlot < estimatedBusyTime) {
+          return timeSlot;
+        }
+
+        return timeSlot > estimatedFreeTime;
+      }
     );
 
     return freeTimeSlots;
   }
 
+  reverseUpdateFreeTimeSlots = (startTimeInDecimal, timeSlotsInDecimal) => {
+    let timeSlotsLessThanStartTime = [];
+
+    if (startTimeInDecimal - COMPLETION_TIME_HOURS < START_OF_BUSINESS) {
+      timeSlotsLessThanStartTime = timeSlotsInDecimal.filter(
+        (timeSlot) => !(timeSlot - COMPLETION_TIME_HOURS >= START_OF_BUSINESS)
+      );
+    } else {
+      timeSlotsLessThanStartTime = [];
+    }
+
+    const estimatedBusyTime =
+      startTimeInDecimal + COMPLETION_TIME_HOURS - TIME_OFFSET;
+
+    const estimatedFreeTime =
+      startTimeInDecimal - COMPLETION_TIME_HOURS + TIME_OFFSET;
+
+    const reversedTimeSlots = timeSlotsInDecimal.filter((timeSlot) => {
+      if (timeSlot < startTimeInDecimal) {
+        return timeSlot > estimatedFreeTime;
+      }
+      return timeSlot >= startTimeInDecimal && timeSlot < estimatedBusyTime;
+    });
+    if (!reversedTimeSlots.includes(startTimeInDecimal))
+      reversedTimeSlots.push(startTimeInDecimal);
+
+    return [
+      ...new Set(
+        [...timeSlotsLessThanStartTime, ...reversedTimeSlots].sort(
+          (a, b) => a - b
+        )
+      ),
+    ];
+  };
   convertTimetoDecimal({ timeString }) {
     const [hours, minutes] = timeString.split(":");
     const decimalTime = parseFloat(hours) + parseFloat(minutes) / 60;
@@ -152,7 +199,7 @@ class FreeTimeSlotService {
     const timeArray = decimalArray.map((decimalTime) => {
       const hours = Math.floor(decimalTime);
       const minutes = Math.round((decimalTime - hours) * 60);
-      const formattedTime = `${hours}:${minutes < 10 ? "0" : ""}${minutes}`;
+      let formattedTime = `${hours}:${minutes < 10 ? "0" : ""}${minutes}`;
 
       if (formattedTime === "9:00") formattedTime = "09:00";
 

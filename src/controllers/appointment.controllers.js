@@ -8,6 +8,8 @@ const {
 const { MESSAGES } = require("../common/constants.common");
 const freeTimeSlotServices = require("../services/freeTimeSlot.services");
 const freeTimeSlotControllers = require("./freeTimeSlot.controllers");
+const { VALID_TIME_SLOTS } =
+  require("../common/constants.common").FREE_TIME_SLOTS;
 
 class AppointmentController {
   async getStatus(req, res) {
@@ -15,48 +17,45 @@ class AppointmentController {
   }
 
   //Create a new appointment
-  async createAppointment(req, res) {
-    const { startTime, endTime, description, customerEmail } = req.body;
-    const { formattedDate: date, formattedTime: timeString } =
+  createAppointment = async (req, res) => {
+    const { startTime } = req.body;
+    let { formattedDate: date, formattedTime: timeString } =
       freeTimeSlotServices.getFormattedDate(startTime);
 
     const startTimeInDecimal = freeTimeSlotServices.convertTimetoDecimal({
       timeString,
     });
 
-    let staffIds = await userService.fetchIdsOfStaffsWhoCanTakeAppointments();
-    if (staffIds.length > 0) {
-      staffIds = staffIds.map((staffId) => staffId.toString());
-    } else {
-      return jsonResponse(
-        res,
-        404,
-        false,
-        "No staff is available to take apointments"
-      );
-    }
-
     const availableTimeSlots =
       await freeTimeSlotControllers.generateFreeTimeSlots({
-        staffIds,
         date,
+        res,
       });
 
-    if (availableTimeSlots.length < 1)
-      return jsonResponse(
-        res,
-        400,
-        false,
-        "No free time slot for the date you selected"
-      );
-    if (!availableTimeSlots.includes(timeString))
-      return jsonResponse(
-        res,
-        400,
-        false,
-        "The time you selected has already been taken"
-      );
+    if (availableTimeSlots.statusCode) return;
 
+    const validateAvailableTimeSlots = this.validateAvailableTimeSlots(
+      res,
+      availableTimeSlots,
+      timeString
+    );
+    if (validateAvailableTimeSlots) return;
+
+    const staffId = await this.updateFreeTimeSlots(
+      timeString,
+      startTimeInDecimal,
+      date
+    );
+
+    const appointment = await appointmentService.createAppointment({
+      body: req.body,
+      staffId,
+    });
+
+    res.send(successMessage(MESSAGES.CREATED, appointment));
+  };
+
+  async updateFreeTimeSlots(timeString, startTimeInDecimal, date) {
     const freeTimeSlots =
       await freeTimeSlotServices.getFreeTimeSlotsBySlotAndDate({
         date,
@@ -84,16 +83,24 @@ class AppointmentController {
       freeTimeSlotId,
       freeTimeSlots
     );
+    return staffId;
+  }
 
-    const appointment = await appointmentService.createAppointment({
-      staffId,
-      customerEmail,
-      endTime,
-      startTime,
-      description,
-    });
-
-    res.send(successMessage(MESSAGES.CREATED, appointment));
+  validateAvailableTimeSlots(res, availableTimeSlots, timeString) {
+    if (availableTimeSlots.length < 1)
+      return jsonResponse(
+        res,
+        400,
+        false,
+        "No free time slot for the date you selected"
+      );
+    if (!availableTimeSlots.includes(timeString))
+      return jsonResponse(
+        res,
+        400,
+        false,
+        "The time you selected has already been taken"
+      );
   }
 
   async getAvailableTimeSlots(req, res) {
@@ -151,12 +158,58 @@ class AppointmentController {
     res.send(successMessage(MESSAGES.FETCHED, entries));
   }
 
+  async getAppointmentsByDate(req, res) {
+    const { date } = req.params;
+
+    const appointments = await appointmentService.getAppointmentByDate({
+      date,
+    });
+
+    res.send(successMessage(MESSAGES.FETCHED, appointments));
+  }
+
   //Update/edit appointment data
-  async updateAppointment(req, res) {
-    const appointment = await appointmentService.getAppointmentById(
-      req.params.id
-    );
-    if (!appointment) return res.status(404).send(errorMessage("appointment"));
+  updateAppointment = async (req, res) => {
+    const { startTime } = req.body;
+    const appointment = await this.getAppointment(req, res);
+
+    const { freeTimeSlots, formattedTime, formattedDate } =
+      await this.getFreeTimeSlotsByDateAndStaffId(appointment);
+
+    if (startTime) {
+      const updatedTimeSlots = await this.retriveFreeTimeSlots(
+        freeTimeSlots,
+        formattedTime
+      );
+
+      freeTimeSlots.timeSlots = updatedTimeSlots;
+
+      await freeTimeSlots.save();
+
+      let { formattedDate: date, formattedTime: timeString } =
+        freeTimeSlotServices.getFormattedDate(startTime);
+
+      const availableTimeSlots =
+        await freeTimeSlotControllers.generateFreeTimeSlots({
+          date,
+          res,
+        });
+
+      if (availableTimeSlots.statusCode) return;
+
+      const validateAvailableTimeSlots = this.validateAvailableTimeSlots(
+        res,
+        availableTimeSlots,
+        timeString
+      );
+      if (validateAvailableTimeSlots) return;
+
+      const staffId = await this.updateFreeTimeSlots(
+        timeString,
+        startTimeInDecimal,
+        date
+      );
+    }
 
     let updatedAppointment = req.body;
     updatedAppointment = await appointmentService.updateAppointmentById(
@@ -165,18 +218,82 @@ class AppointmentController {
     );
 
     res.send(successMessage(MESSAGES.UPDATED, updatedAppointment));
-  }
+  };
 
   //Delete appointment account entirely from the database
-  async deleteAppointment(req, res) {
-    const appointment = await appointmentService.getAppointmentById(
-      req.params.id
+  cancelAppointment = async (req, res) => {
+    const appointment = await this.getAppointment(req, res);
+    if (appointment.statusCode) return;
+
+    const { freeTimeSlots, formattedTime } =
+      await this.getFreeTimeSlotsByDateAndStaffId(appointment);
+
+    const updatedTimeSlots = await this.retriveFreeTimeSlots(
+      freeTimeSlots,
+      formattedTime
     );
-    if (!appointment) return res.status(404).send(errorMessage("appointment"));
+    freeTimeSlots.timeSlots = updatedTimeSlots;
+
+    await freeTimeSlots.save();
 
     await appointmentService.deleteAppointment(req.params.id);
 
     res.send(successMessage(MESSAGES.DELETED, appointment));
+  };
+
+  async getFreeTimeSlotsByDateAndStaffId(appointment) {
+    const { staffId, startTime } = appointment;
+
+    const { formattedDate, formattedTime } =
+      freeTimeSlotServices.getFormattedDate(startTime);
+
+    const freeTimeSlots =
+      await freeTimeSlotServices.fetchFreeTimeSlotsByDateAndStaffId({
+        staffId,
+        date: formattedDate,
+      });
+
+    return { freeTimeSlots, formattedTime, formattedDate };
+  }
+
+  async getAppointment(req, res) {
+    const appointment = await appointmentService.getAppointmentById(
+      req.params.id
+    );
+
+    if (!appointment) {
+      return res.status(404).send(errorMessage("appointment"));
+    }
+
+    return appointment;
+  }
+
+  async retriveFreeTimeSlots(freeTimeSlots, formattedTime) {
+    const startTimeInDecimal = freeTimeSlotServices.convertTimetoDecimal({
+      timeString: formattedTime,
+    });
+
+    const timeSlotsInDecimal =
+      freeTimeSlotServices.convertTimeArrayToDecimal(VALID_TIME_SLOTS);
+
+    const retrievedTimeSlotsInDecimal =
+      freeTimeSlotServices.reverseUpdateFreeTimeSlots(
+        startTimeInDecimal,
+        timeSlotsInDecimal
+      );
+
+    const retrievedTimeSlot = freeTimeSlotServices.convertDecimalArrayToTime(
+      retrievedTimeSlotsInDecimal
+    );
+    const curentFreeTimeSlots = freeTimeSlots.timeSlots;
+
+    const updatedTimeSlots = [
+      ...new Set(
+        [...retrievedTimeSlot, ...curentFreeTimeSlots].sort((a, b) => a - b)
+      ),
+    ];
+
+    return updatedTimeSlots;
   }
 }
 
