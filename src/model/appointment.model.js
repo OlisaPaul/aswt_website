@@ -14,7 +14,7 @@ const paymentDetailsSchema = new mongoose.Schema({
   },
 });
 
-const dealershipCarDetailsSchema = new mongoose.Schema({
+const carDetailsSchema = new mongoose.Schema({
   year: {
     type: String,
     minlength: 4,
@@ -23,11 +23,6 @@ const dealershipCarDetailsSchema = new mongoose.Schema({
   make: {
     type: String,
     minlength: 1,
-    maxlength: 255,
-  },
-  vin: {
-    type: String,
-    minlength: 5,
     maxlength: 255,
   },
   model: {
@@ -40,7 +35,7 @@ const dealershipCarDetailsSchema = new mongoose.Schema({
 const appointmentSchema = new mongoose.Schema({
   appointmentType: {
     type: String,
-    enum: ["dealership", "commercial"],
+    enum: ["auto", "commercial"],
     required: true,
   },
   customerEmail: {
@@ -69,8 +64,8 @@ const appointmentSchema = new mongoose.Schema({
     type: paymentDetailsSchema,
     default: undefined,
   },
-  dealershipCarDetails: {
-    type: dealershipCarDetailsSchema,
+  carDetails: {
+    type: carDetailsSchema,
     default: undefined,
   },
 });
@@ -78,10 +73,10 @@ const appointmentSchema = new mongoose.Schema({
 addVirtualIdUtils(appointmentSchema);
 
 appointmentSchema.pre("validate", function (next) {
-  if (this.appointmentType === "dealership" && !this.dealershipCarDetails) {
+  if (this.appointmentType === "auto" && !this.carDetails) {
     this.invalidate(
-      "dealershipCarDetails",
-      "dealershipCarDetails is required for dealership appointments"
+      "carDetails",
+      "carDetails is required for auto appointments"
     );
   }
   next();
@@ -92,20 +87,19 @@ const Appointment = mongoose.model("Appointment", appointmentSchema);
 function validate(appointment) {
   const schema = Joi.object({
     appointmentType: Joi.string()
-      .valid("dealership", "commercial")
+      .valid("auto", "commercial")
       .insensitive()
       .required(),
     customerEmail: Joi.string().email().required(),
     startTime: Joi.date().required(),
     endTime: Joi.date().required(),
     description: Joi.string().max(255).min(3),
-    dealershipCarDetails: Joi.object({
+    carDetails: Joi.object({
       year: Joi.string().min(4).max(4).required(),
       make: Joi.string().min(1).max(255).required(),
-      vin: Joi.string().min(5).max(255).required(),
       model: Joi.string().min(1).max(255).required(),
     }).when("appointmentType", {
-      is: "dealership",
+      is: "auto",
       then: Joi.required(),
       otherwise: Joi.forbidden(),
     }),
@@ -116,16 +110,13 @@ function validate(appointment) {
 
 function validatePatch(appointment) {
   const schema = Joi.object({
-    appointmentType: Joi.string()
-      .valid("dealership", "commercial")
-      .insensitive(),
+    appointmentType: Joi.string().valid("auto", "commercial").insensitive(),
     staffIds: Joi.array().items(Joi.objectId().required()),
     startTime: Joi.date().required(),
     description: Joi.string().max(255).min(3),
-    dealershipCarDetails: Joi.object({
+    carDetails: Joi.object({
       year: Joi.string().min(4).max(4),
       make: Joi.string().min(1).max(255),
-      vin: Joi.string().min(5).max(255),
       model: Joi.string().min(1).max(255),
     }).when("appointmentType", {
       is: "commercial",

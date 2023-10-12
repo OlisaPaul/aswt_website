@@ -20,6 +20,7 @@ const oauth2 = require("../routes/oauth2.routes");
 const webhook = require("../routes/webhook.routes");
 const stripe = require("../routes/stripe.routes");
 const appointments = require("../routes/appointment.routes");
+const articles = require("../routes/article.routes");
 const session = require("./session.startup");
 
 const { localEndpoint } = process.env;
@@ -41,6 +42,7 @@ module.exports = function (app) {
   // app.use(bodyParser.urlencoded({ extended: true }));
   app.use(session());
 
+  app.use(`${localEndpoint}/articles`, articles);
   app.use(`${localEndpoint}/appointments`, appointments);
   app.use(`${localEndpoint}/auth`, auth);
   app.use(`${localEndpoint}/invoices`, invoices);

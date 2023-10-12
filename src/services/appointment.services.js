@@ -10,7 +10,7 @@ class AppointmentService {
       customerEmail,
       description,
       appointmentType,
-      dealershipCarDetails,
+      carDetails,
     } = body;
 
     startTime = new Date(startTime);
@@ -23,7 +23,7 @@ class AppointmentService {
       startTime,
       description,
       appointmentType,
-      dealershipCarDetails,
+      carDetails,
     });
 
     return await appointment.save();
