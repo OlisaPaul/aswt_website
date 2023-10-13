@@ -1,8 +1,8 @@
+require("dotenv").config();
 const mongoose = require("mongoose");
 const Joi = require("joi");
 const { User } = require("./user.model");
 const addVirtualIdUtils = require("../utils/addVirtualId.utils");
-require("dotenv").config();
 
 const paymentDetailsSchema = new mongoose.Schema({
   amountPaid: {
@@ -41,6 +41,11 @@ const appointmentSchema = new mongoose.Schema({
   customerEmail: {
     type: String,
     ref: User,
+    required: true,
+  },
+  customerNumber: {
+    type: String,
+    required: true,
   },
   staffId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -68,6 +73,10 @@ const appointmentSchema = new mongoose.Schema({
     type: carDetailsSchema,
     default: undefined,
   },
+  reminderSent: {
+    type: Boolean,
+    default: false,
+  },
 });
 
 addVirtualIdUtils(appointmentSchema);
@@ -91,6 +100,7 @@ function validate(appointment) {
       .insensitive()
       .required(),
     customerEmail: Joi.string().email().required(),
+    customerNumber: Joi.string().required(),
     startTime: Joi.date().required(),
     endTime: Joi.date().required(),
     description: Joi.string().max(255).min(3),

@@ -49,7 +49,13 @@ const logoutSuccess = () => {
   return { message: MESSAGES.SUCCESFUL_LOGOUT, success: true };
 };
 
+const SMS = {
+  nowBody: (date) => `Hello, your appointment is scheduled for: ${date}.`,
+  reminderBody: (date) => `Appointment reminder at: ${date}.`,
+};
+
 exports.errorMessage = errorMessage;
+exports.SMS = SMS;
 exports.errorMessageUserName = errorMessageUserName;
 exports.successMessage = successMessage;
 exports.unAuthMessage = unAuthMessage;

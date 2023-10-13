@@ -4,26 +4,14 @@ const entryUtils = require("../utils/entry.utils");
 class AppointmentService {
   //Create new appointment
   async createAppointment({ body, staffId }) {
-    let {
-      startTime,
-      endTime,
-      customerEmail,
-      description,
-      appointmentType,
-      carDetails,
-    } = body;
+    let { startTime, endTime } = body;
 
     startTime = new Date(startTime);
     endTime = new Date(endTime);
 
     const appointment = new Appointment({
       staffId,
-      customerEmail,
-      endTime,
-      startTime,
-      description,
-      appointmentType,
-      carDetails,
+      ...body,
     });
 
     return await appointment.save();

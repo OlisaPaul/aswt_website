@@ -1,15 +1,23 @@
+const Queue = require("bull");
 const appointmentService = require("../services/appointment.services");
 const userService = require("../services/user.services");
 const {
   errorMessage,
   successMessage,
   jsonResponse,
+  SMS,
 } = require("../common/messages.common");
 const { MESSAGES } = require("../common/constants.common");
 const freeTimeSlotServices = require("../services/freeTimeSlot.services");
 const freeTimeSlotControllers = require("./freeTimeSlot.controllers");
+const sendTextMessage = require("../utils/sendTextMessage.utils");
+const getSmsDateUtils = require("../utils/getSmsDate.utils");
 const { VALID_TIME_SLOTS } =
   require("../common/constants.common").FREE_TIME_SLOTS;
+const newDateUtils = require("../utils/newDate.utils");
+
+const redisConnection = { url: process.env.redisUrl };
+const appointmentQueue = new Queue("reminders", redisConnection);
 
 class AppointmentController {
   async getStatus(req, res) {
@@ -18,9 +26,11 @@ class AppointmentController {
 
   //Create a new appointment
   createAppointment = async (req, res) => {
-    const { startTime } = req.body;
+    const { startTime, customerNumber } = req.body;
     let { formattedDate: date, formattedTime: timeString } =
       freeTimeSlotServices.getFormattedDate(startTime);
+
+    const smsDate = getSmsDateUtils(startTime);
 
     const startTimeInDecimal = freeTimeSlotServices.convertTimetoDecimal({
       timeString,
@@ -51,6 +61,21 @@ class AppointmentController {
       body: req.body,
       staffId,
     });
+
+    const delay = this.getDelay(startTime);
+    const { nowBody, reminderBody } = SMS;
+
+    sendTextMessage(customerNumber, nowBody(smsDate));
+
+    appointmentQueue.add(
+      {
+        customerNumber,
+        body: reminderBody(smsDate),
+      },
+      {
+        delay,
+      }
+    );
 
     res.send(successMessage(MESSAGES.CREATED, appointment));
   };
@@ -87,6 +112,7 @@ class AppointmentController {
   }
 
   validateAvailableTimeSlots(res, availableTimeSlots, timeString) {
+    console.log(availableTimeSlots);
     if (availableTimeSlots.length < 1)
       return jsonResponse(
         res,
@@ -294,6 +320,22 @@ class AppointmentController {
     ];
 
     return updatedTimeSlots;
+  }
+  getDelay(startTime) {
+    const currentDate = newDateUtils();
+    const appointmentTime = new Date(startTime);
+
+    //   date.setMinutes(date.getMinutes() + 1);
+
+    const oneHour = 60 * 60 * 1000;
+
+    const delay = appointmentTime.getTime() - currentDate.getTime() - oneHour;
+
+    return delay > 0 ? delay : delay + oneHour;
+  }
+
+  exportQueue() {
+    return appointmentQueue;
   }
 }
 
