@@ -9,10 +9,13 @@ const {
   validate,
   validateAvailableTimeSlot,
 } = require("../model/appointment.model");
+const validateTimeslotsMiddleware = require("../middleware/validateTimeslots.middleware");
+const takenTimeslotsControllers = require("../controllers/takenTimeslots.controllers");
 
 router.post(
   "/",
   validateMiddleware(validate),
+  validateTimeslotsMiddleware,
   appointmentControllers.createAppointment
 );
 router.delete(
@@ -29,7 +32,10 @@ router.get(
   appointmentControllers.getAppointmentsByDate
 );
 
-router.post("/available-time-slots", freeTimeSlotControllers.getFreeTimeSlots);
+router.post(
+  "/available-time-slots",
+  takenTimeslotsControllers.getTakenTimeSlots
+);
 router.put(
   "/clear-out-appointment",
   auth,

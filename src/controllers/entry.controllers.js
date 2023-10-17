@@ -52,6 +52,9 @@ class EntryController {
     const { carDetails } = req.body;
     const { vin } = carDetails;
 
+    const customerOnDb = userService.findCustomerByQbId(customerId);
+    if (!customerOnDb) return res.status(404).send(errorMessage("customer"));
+
     const { data: customer, error } =
       await customerService.getOrSetCustomerOnCache(customerId);
     if (error)
@@ -98,7 +101,6 @@ class EntryController {
         entryService.getServiceAndEntry(carDetails, customerId, customer),
         serviceService.validateServiceIds(serviceIds),
       ]);
-    console.log(isCarServiceAdded);
 
     if (Array.isArray(entry)) entry = entry[0];
 

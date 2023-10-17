@@ -8,4 +8,9 @@ router.post(
   qboAsyncMiddleware(stripeControllers.stripeCheckoutSession)
 );
 
+router.post(
+  "/refund-appointment-money",
+  qboAsyncMiddleware(stripeControllers.initiateRefund)
+);
+
 module.exports = router;

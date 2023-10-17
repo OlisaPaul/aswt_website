@@ -1,33 +1,43 @@
 require("dotenv").config();
+const { jsonResponse, errorMessage } = require("../common/messages.common");
+const appointmentServices = require("../services/appointment.services");
 const stripe = require("stripe")(process.env.stripeSecretKey);
-
-const storeItems = new Map([
-  [1, { priceInCents: 10000, name: "Learn React Today" }],
-  [2, { priceInCents: 20000, name: "Learn CSS Today" }],
-]);
 
 class StripeController {
   async stripeCheckoutSession(req, res) {
+    const { appointmentId } = req.body;
+
     try {
+      const appointment = await appointmentServices.getAppointmentById(
+        appointmentId
+      );
+      if (!appointment)
+        return res.status(404).send(errorMessage("appointment"));
+
+      if (appointment.paymentDetails.hasPaid)
+        return jsonResponse(res, 400, false, "Payment has already been made");
+
+      const priceBreakdown = appointment.carDetails.priceBreakdown;
+
       const session = await stripe.checkout.sessions.create({
         payment_method_types: ["card"],
         mode: "payment",
-        line_items: req.body.items.map((item) => {
-          const storeItem = storeItems.get(item.id);
+        line_items: priceBreakdown.map((item) => {
+          const thirtyPercentOfPriceInCents = item.price * 30;
           return {
             price_data: {
               currency: "usd",
               product_data: {
-                name: storeItem.name,
+                name: item.serviceName,
               },
-              unit_amount: storeItem.priceInCents,
+              unit_amount: thirtyPercentOfPriceInCents,
             },
-            quantity: item.quantity,
+            quantity: 1,
           };
         }),
         payment_intent_data: {
           metadata: {
-            entryId: "651f024cfbae903d1ce91039",
+            appointmentId,
           },
         },
 
@@ -38,6 +48,28 @@ class StripeController {
     } catch (e) {
       res.status(500).json({ error: e.message });
     }
+  }
+
+  async initiateRefund(appointment) {
+    const results = {};
+    try {
+      const paymentIntentId = appointment.paymentDetails.paymentIntentId;
+      const refund = await stripe.refunds.create({
+        payment_intent: paymentIntentId,
+        reason: "requested_by_customer", // You can customize the reason as needed
+      });
+
+      if (refund.status === "succeeded") {
+        appointmentServices.refundPaymentDetails({ appointment, refund });
+      }
+
+      results.refund = refund;
+    } catch (error) {
+      results.error = error;
+      console.error("Refund failed:", error);
+    }
+
+    return results;
   }
 }
 

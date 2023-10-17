@@ -4,6 +4,8 @@ var express = require("express");
 var crypto = require("crypto");
 const customerService = require("../services/customer.service");
 const entryServices = require("../services/entry.services");
+const newDateUtils = require("../utils/newDate.utils");
+const appointmentServices = require("../services/appointment.services");
 
 class WebhookControllers {
   async webhook(req, res) {
@@ -85,25 +87,24 @@ class WebhookControllers {
           const centToUsd = 100;
           const amount = intent.amount_received / centToUsd;
           const currency = intent.currency;
-          const entryId = intent.metadata.entryId;
-          const paymentDate = new Date();
+          const appointmentId = intent.metadata.appointmentId;
+          const paymentDate = newDateUtils();
+          const paymentIntentId = intent.id;
 
-          if (entryId) {
-            await entryServices.updateEntryPaymentDetails({
-              entryId,
+          if (appointmentId) {
+            await appointmentServices.updateAppointmentPaymentDetails({
+              appointmentId,
               amount,
               currency,
               paymentDate,
+              paymentIntentId,
+              chargeId: intent.latest_charge,
             });
           }
-
-          // const charge = intent.charges.data;
-          // console.log(charge);
-
-          console.log(amount, currency, entryId, paymentDate);
         }
       } else if (event.type === "charge.succeeded") {
         const charge = event.data.object;
+        console.log("Charge ID:", charge.id);
         // console.log(`Charge: ${charge.payment_intent}`);
       } else if (event.type === "checkout.session.completed") {
         const checkout = event.data.object;

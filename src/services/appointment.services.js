@@ -1,5 +1,8 @@
 const { Appointment } = require("../model/appointment.model");
 const entryUtils = require("../utils/entry.utils");
+const entryService = require("../services/entry.services");
+const newDateUtils = require("../utils/newDate.utils");
+const freeTimeSlotServices = require("./freeTimeSlot.services");
 
 class AppointmentService {
   //Create new appointment
@@ -91,6 +94,25 @@ class AppointmentService {
     return availableTimeSlots;
   }
 
+  getPriceForService = (services, category) => {
+    const lowerCaseCategory = category.toLowerCase();
+
+    const defaultPrices = services.map((service) => ({
+      dealership: false,
+      serviceName: service.name,
+      price: service.defaultPrices.find((p) => p.category === lowerCaseCategory)
+        .price,
+      serviceType: service.type,
+      serviceId: service._id,
+    }));
+
+    const priceBreakdown = [...defaultPrices];
+
+    const price = entryService.calculateServicePriceDoneforCar(priceBreakdown);
+
+    return { price, priceBreakdown, lowerCaseCategory };
+  };
+
   async validateAppointmentIds(appointmentIds) {
     const appointments = await Appointment.find({
       _id: { $in: appointmentIds },
@@ -120,6 +142,51 @@ class AppointmentService {
       { new: true }
     );
   }
+  updateAppointmentPaymentDetails = async ({
+    appointmentId,
+    currency,
+    paymentDate,
+    amount,
+    paymentIntentId,
+    chargeId,
+  }) => {
+    const appointment = await this.getAppointmentById(appointmentId);
+
+    if (!appointment) return;
+    if (!appointment.paymentDetails) appointment.paymentDetails = {};
+
+    appointment.paymentDetails.paymentDate = paymentDate;
+    appointment.paymentDetails.currency = currency;
+
+    const totalAmountPaid = appointment.paymentDetails.amountPaid + amount;
+    appointment.paymentDetails.amountPaid = totalAmountPaid;
+
+    const amountDue = appointment.carDetails.price - totalAmountPaid;
+    appointment.paymentDetails.amountDue = amountDue;
+    appointment.paymentDetails.paymentIntentId = paymentIntentId;
+    appointment.paymentDetails.chargeId = chargeId;
+    appointment.paymentDetails.hasPaid = true;
+
+    return await this.updateAppointmentById(appointmentId, appointment);
+  };
+
+  refundPaymentDetails = async ({ appointment, refund }) => {
+    if (!appointment.refundDetails) appointment.refundDetails = {};
+
+    const refundAmountInCents = refund.amount;
+    const refundAmount = refundAmountInCents / 100;
+    const refundId = refund.id;
+    const paymentIntentId = refund.payment_intent;
+
+    appointment.refundDetails.refundDate = newDateUtils();
+    appointment.refundDetails.refundAmount = refundAmount;
+    appointment.refundDetails.refundId = refundId;
+    appointment.refundDetails.paymentIntentId = paymentIntentId;
+    appointment.refundDetails.refunded = true;
+    // appointment.refundDetails.refundAmount =
+
+    return await appointment.save();
+  };
 
   async deleteAppointment(id) {
     return await Appointment.findByIdAndRemove(id);

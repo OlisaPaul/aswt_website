@@ -196,11 +196,11 @@ class FreeTimeSlotService {
 
   convertDecimalArrayToTime(decimalArray) {
     const timeArray = decimalArray.map((decimalTime) => {
-      const hours = Math.floor(decimalTime);
-      const minutes = Math.round((decimalTime - hours) * 60);
-      let formattedTime = `${hours}:${minutes < 10 ? "0" : ""}${minutes}`;
+      let hours = Math.floor(decimalTime);
+      if (hours < 10) hours = `0${hours}`;
 
-      if (formattedTime === "9:00") formattedTime = "09:00";
+      const minutes = Math.round((decimalTime - hours) * 60);
+      const formattedTime = `${hours}:${minutes < 10 ? "0" : ""}${minutes}`;
 
       return formattedTime;
     });

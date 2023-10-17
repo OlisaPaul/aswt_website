@@ -22,6 +22,7 @@ const {
 const validateServiceIdsMiddleware = require("../middleware/validateServiceIds.middleware");
 const validateMonthYearParamsMiddleware = require("../middleware/validateMonthYearParams.middleware");
 const validateDateParams = require("../middleware/validDateParams.middleware");
+const roleBaseAuth = require("../middleware/roleBaseAuth.middleware.");
 
 router.post(
   "/",
@@ -134,6 +135,8 @@ router.put(
 
 router.put(
   "/add-vin/:id",
+  auth,
+  roleBaseAuth(["customer"]),
   [validateMiddleware(validateAddVin)],
   qboAsyncMiddleware(entryController.addVin)
 );

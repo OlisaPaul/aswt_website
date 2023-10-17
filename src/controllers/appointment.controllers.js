@@ -1,6 +1,5 @@
 const Queue = require("bull");
 const appointmentService = require("../services/appointment.services");
-const userService = require("../services/user.services");
 const {
   errorMessage,
   successMessage,
@@ -15,6 +14,10 @@ const getSmsDateUtils = require("../utils/getSmsDate.utils");
 const { VALID_TIME_SLOTS } =
   require("../common/constants.common").FREE_TIME_SLOTS;
 const newDateUtils = require("../utils/newDate.utils");
+const takenTimeslotsControllers = require("./takenTimeslots.controllers");
+const takenTimeslotServices = require("../services/takenTimeslot.services");
+const serviceServices = require("../services/service.services");
+const { initiateRefund } = require("./stripe.controllers");
 
 const redisConnection = { url: process.env.redisUrl };
 const appointmentQueue = new Queue("reminders", redisConnection);
@@ -26,40 +29,71 @@ class AppointmentController {
 
   //Create a new appointment
   createAppointment = async (req, res) => {
-    const { startTime, customerNumber } = req.body;
+    const { startTime, customerNumber, carDetails } = req.body;
     let { formattedDate: date, formattedTime: timeString } =
       freeTimeSlotServices.getFormattedDate(startTime);
 
+    const { serviceIds, category } = carDetails;
+
     const smsDate = getSmsDateUtils(startTime);
+
+    const [services, missingIds] = await Promise.all([
+      serviceServices.getMultipleServices(serviceIds),
+      serviceServices.validateServiceIds(serviceIds),
+    ]);
+
+    if (missingIds.length > 0)
+      return jsonResponse(
+        res,
+        404,
+        false,
+        `Services with IDs: ${missingIds} could not be found`
+      );
+
+    const { priceBreakdown, price, lowerCaseCategory } =
+      appointmentService.getPriceForService(services, category);
+
+    req.body.carDetails.priceBreakdown = priceBreakdown;
+    req.body.carDetails.price = price;
+    req.body.carDetails.category = lowerCaseCategory;
 
     const startTimeInDecimal = freeTimeSlotServices.convertTimetoDecimal({
       timeString,
     });
 
-    const availableTimeSlots =
-      await freeTimeSlotControllers.generateFreeTimeSlots({
+    const takenTimeslotsDetails =
+      await takenTimeslotsControllers.generateTakenTimeslots({
         date,
         res,
       });
 
-    if (availableTimeSlots.statusCode) return;
+    if (takenTimeslotsDetails.statusCode) return;
 
-    const validateAvailableTimeSlots = this.validateAvailableTimeSlots(
+    const validateTakenTimeslots = this.validateTakenTimeslots(
       res,
-      availableTimeSlots,
+      takenTimeslotsDetails,
       timeString
     );
-    if (validateAvailableTimeSlots) return;
+    if (validateTakenTimeslots) return;
 
-    const staffId = await this.updateFreeTimeSlots(
+    const freeStaffPerTime = takenTimeslotServices.getFreeStaffPerTime(
+      takenTimeslotsDetails,
+      timeString
+    );
+
+    const takenTimeSlotForStaff =
+      takenTimeslotServices.getTakenTimeslotForStaff(freeStaffPerTime);
+
+    await takenTimeslotServices.updateTakenTimeslotsForStaff(
+      takenTimeSlotForStaff,
       timeString,
-      startTimeInDecimal,
+      2,
       date
     );
 
     const appointment = await appointmentService.createAppointment({
       body: req.body,
-      staffId,
+      staffId: takenTimeSlotForStaff.staffId,
     });
 
     const delay = this.getDelay(startTime);
@@ -111,16 +145,10 @@ class AppointmentController {
     return staffId;
   }
 
-  validateAvailableTimeSlots(res, availableTimeSlots, timeString) {
-    console.log(availableTimeSlots);
-    if (availableTimeSlots.length < 1)
-      return jsonResponse(
-        res,
-        400,
-        false,
-        "No free time slot for the date you selected"
-      );
-    if (!availableTimeSlots.includes(timeString))
+  validateTakenTimeslots(res, takenTimeslotsDetails, timeString) {
+    const { takenTimeslots } = takenTimeslotsDetails;
+
+    if (takenTimeslots.includes(timeString))
       return jsonResponse(
         res,
         400,
@@ -142,8 +170,6 @@ class AppointmentController {
     const allAppointments = await appointmentService.getAllAppointments({
       overlappingAppointments,
     });
-
-    // console.log(allAppointments);
 
     const availableTimeSlots = appointmentService.getAvailableTimeSlots({
       allAppointments,
@@ -197,42 +223,48 @@ class AppointmentController {
   //Update/edit appointment data
   updateAppointment = async (req, res) => {
     const { startTime } = req.body;
-    const appointment = await this.getAppointment(req, res);
-
-    const { freeTimeSlots, formattedTime, formattedDate } =
-      await this.getFreeTimeSlotsByDateAndStaffId(appointment);
+    const appointment = await appointmentService.getAppointmentById(
+      req.params.id
+    );
+    if (!appointment) {
+      return res.status(404).send(errorMessage("appointment"));
+    }
 
     if (startTime) {
-      const updatedTimeSlots = await this.retriveFreeTimeSlots(
-        freeTimeSlots,
-        formattedTime
-      );
-
-      freeTimeSlots.timeSlots = updatedTimeSlots;
-
-      await freeTimeSlots.save();
+      const staffTakenTimeSlot =
+        await takenTimeslotServices.retriveTakenTimeslots(appointment);
 
       let { formattedDate: date, formattedTime: timeString } =
         freeTimeSlotServices.getFormattedDate(startTime);
-
-      const availableTimeSlots =
-        await freeTimeSlotControllers.generateFreeTimeSlots({
+      const takenTimeslotsDetails =
+        await takenTimeslotsControllers.generateTakenTimeslots({
           date,
           res,
         });
 
-      if (availableTimeSlots.statusCode) return;
+      if (takenTimeslotsDetails.statusCode) return;
 
-      const validateAvailableTimeSlots = this.validateAvailableTimeSlots(
+      const validateTakenTimeslots = this.validateTakenTimeslots(
         res,
-        availableTimeSlots,
+        takenTimeslotsDetails,
         timeString
       );
-      if (validateAvailableTimeSlots) return;
+      if (validateTakenTimeslots) return;
 
-      const staffId = await this.updateFreeTimeSlots(
+      const freeStaffPerTime = takenTimeslotServices.getFreeStaffPerTime(
+        takenTimeslotsDetails,
+        timeString
+      );
+
+      const takenTimeSlotForStaff =
+        takenTimeslotServices.getTakenTimeslotForStaff(freeStaffPerTime);
+
+      await staffTakenTimeSlot.save();
+
+      await takenTimeslotServices.updateTakenTimeslotsForStaff(
+        takenTimeSlotForStaff,
         timeString,
-        startTimeInDecimal,
+        2,
         date
       );
     }
@@ -248,23 +280,27 @@ class AppointmentController {
 
   //Delete appointment account entirely from the database
   cancelAppointment = async (req, res) => {
-    const appointment = await this.getAppointment(req, res);
-    if (appointment.statusCode) return;
-
-    const { freeTimeSlots, formattedTime } =
-      await this.getFreeTimeSlotsByDateAndStaffId(appointment);
-
-    const updatedTimeSlots = await this.retriveFreeTimeSlots(
-      freeTimeSlots,
-      formattedTime
+    const appointmentId = req.params.id;
+    const appointment = await appointmentService.getAppointmentById(
+      appointmentId
     );
-    freeTimeSlots.timeSlots = updatedTimeSlots;
 
-    await freeTimeSlots.save();
+    if (!appointment) {
+      return res.status(404).send(errorMessage("appointment"));
+    }
 
-    await appointmentService.deleteAppointment(req.params.id);
+    const staffTakenTimeSlot =
+      await takenTimeslotServices.retriveTakenTimeslots(appointment);
 
-    res.send(successMessage(MESSAGES.DELETED, appointment));
+    const { error, refund } = await initiateRefund(appointment);
+    if (error) {
+      if (error.type === "StripeInvalidRequestError")
+        return jsonResponse(res, error.raw.statusCode, false, error.raw.code);
+    }
+
+    await staffTakenTimeSlot.save();
+
+    res.send(successMessage(MESSAGES.UPDATED, refund));
   };
 
   async getFreeTimeSlotsByDateAndStaffId(appointment) {
