@@ -44,12 +44,18 @@ class ServiceService {
     });
   }
 
-  async getMultipleServices(serviceIds) {
-    return await Service.find({
-      _id: {
-        $in: serviceIds,
-      },
-    });
+  async getMultipleServices(serviceIds, lean) {
+    return lean
+      ? await Service.find({
+          _id: {
+            $in: serviceIds,
+          },
+        }).lean()
+      : await Service.find({
+          _id: {
+            $in: serviceIds,
+          },
+        });
   }
 
   async updateServiceById(id, service) {

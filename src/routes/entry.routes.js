@@ -14,6 +14,7 @@ const staffMiddleware = require("../middleware/staff.middleware");
 const {
   validate,
   validatePatch,
+  validateAddVin,
   validateAddInvoicePatch,
   validateModifyPrice,
   validateModifyCarDetails,
@@ -21,6 +22,7 @@ const {
 const validateServiceIdsMiddleware = require("../middleware/validateServiceIds.middleware");
 const validateMonthYearParamsMiddleware = require("../middleware/validateMonthYearParams.middleware");
 const validateDateParams = require("../middleware/validDateParams.middleware");
+const roleBaseAuth = require("../middleware/roleBaseAuth.middleware.");
 
 router.post(
   "/",
@@ -37,6 +39,12 @@ router.get(
   asyncMiddleware(entryController.getEntryById)
 );
 
+router.get(
+  "/customer/vin/:customerId/:vin",
+  // auth,
+  //validateObjectIdWithXArgMiddleware(["customerId"]),
+  qboAsyncMiddleware(entryController.getCarsDoneForCustomer)
+);
 router.get(
   "/customer/:customerId",
   auth,
@@ -123,6 +131,14 @@ router.put(
   "/add-car/:id",
   [auth, staffMiddleware, validateMiddleware(validateAddInvoicePatch)],
   qboAsyncMiddleware(entryController.addInvoice)
+);
+
+router.put(
+  "/add-vin/:id",
+  auth,
+  roleBaseAuth(["customer"]),
+  [validateMiddleware(validateAddVin)],
+  qboAsyncMiddleware(entryController.addVin)
 );
 
 router.put(

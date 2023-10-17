@@ -8,7 +8,10 @@
 .pnp.js
 .env
 test*
-
+olisa*
+/client
+/views
+items.json
 # testing
 /coverage
 

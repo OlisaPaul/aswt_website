@@ -2,12 +2,17 @@ const validateMiddleware = require("../middleware/validate.middleware");
 const admin = require("../middleware/admin.middleware");
 const adminOrManager = require("../middleware/adminOrManager.middleware");
 const auth = require("../middleware/auth.middleware");
-const { validate } = require("../model/customer.model");
 const express = require("express");
 const router = express.Router();
 const asyncMiddleware = require("../middleware/async.middleware");
 const customerController = require("../controllers/customer.controllers");
 const qboAsyncMiddleware = require("../middleware/qboAsync.middleware");
+const newCustomerMiddleware = require("../middleware/newCustomer.middleware");
+const {
+  validate,
+  validatePatch,
+  validateInvitationEmail,
+} = require("../model/customer.model");
 
 router.post(
   "/",
@@ -15,6 +20,35 @@ router.post(
   admin,
   validateMiddleware(validate),
   qboAsyncMiddleware(customerController.createCustomer)
+);
+router.post(
+  "/send-invitation-link",
+  auth,
+  admin,
+  validateMiddleware(validateInvitationEmail),
+  qboAsyncMiddleware(customerController.sendRegistrationLink)
+);
+
+router.post(
+  "/:token",
+  newCustomerMiddleware,
+  validateMiddleware(validate),
+  asyncMiddleware(customerController.createCustomer)
+);
+
+router.put(
+  "/:id",
+  auth,
+  admin,
+  validateMiddleware(validatePatch),
+  qboAsyncMiddleware(customerController.updateCustomerById)
+);
+
+router.delete(
+  "/:id",
+  auth,
+  admin,
+  qboAsyncMiddleware(customerController.deleteUserAccount)
 );
 
 router.get("/", auth, qboAsyncMiddleware(customerController.getCustomers));

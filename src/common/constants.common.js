@@ -46,7 +46,7 @@ const constants = {
     LOGIN_FAILURE: "Unable to login. Username or password incorrect",
     USER_EXISTS: "User already registered",
     INVALID(ids, collection) {
-      return `This ids: ${ids} are not in the ${collection}`;
+      return `This ids: [${ids}] are not in the ${collection}`;
     },
   },
   DATE: {
@@ -91,6 +91,33 @@ const constants = {
     "November",
     "December",
   ],
+  FREE_TIME_SLOTS: {
+    VALID_TIME_SLOTS: [
+      "09:00",
+      "09:30",
+      "10:00",
+      "10:30",
+      "11:00",
+      "11:30",
+      "12:00",
+      "12:30",
+      "13:00",
+      "13:30",
+      "14:00",
+      "14:30",
+      "15:00",
+      "15:30",
+      "16:00",
+      "16:30",
+      "17:00",
+      "17:30",
+      "18:00",
+      "18:30",
+    ],
+    COMPLETION_TIME_HOURS: 3,
+    START_OF_BUSINESS: 9,
+    TIME_OFFSET: 0.001,
+  },
   transactionOptions: {
     readPreference: "primary",
     readConcern: { level: "local" },
