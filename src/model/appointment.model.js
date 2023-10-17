@@ -162,7 +162,6 @@ function validate(appointment) {
     customerEmail: Joi.string().email().required(),
     customerNumber: Joi.string().required(),
     startTime: Joi.date().required(),
-    endTime: Joi.date().required(),
     description: Joi.string().max(255).min(3),
     carDetails: Joi.object({
       year: Joi.string().min(4).max(4).required(),

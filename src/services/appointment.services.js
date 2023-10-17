@@ -20,6 +20,30 @@ class AppointmentService {
     return await appointment.save();
   }
 
+  calculateEndTime(startTime, hours) {
+    // Create a copy of the start date to avoid modifying the original date
+    const endTime = new Date(startTime);
+
+    // Calculate the total milliseconds to add (including fractional part)
+    const millisecondsToAdd = Math.floor(hours * 60 * 60 * 1000);
+
+    // Add the milliseconds to the date
+    endTime.setTime(endTime.getTime() + millisecondsToAdd);
+
+    // Return the updated date
+    return endTime;
+  }
+
+  calculateTotalTimeOfCompletion(services) {
+    // Using the reduce function to sum up all timeOfCompletion values
+    const totalTime = services.reduce(
+      (total, slot) => total + slot.timeOfCompletion,
+      0
+    );
+
+    return totalTime;
+  }
+
   async getAppointmentById(appointmentId) {
     return await Appointment.findById(appointmentId);
   }

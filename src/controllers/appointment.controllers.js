@@ -38,7 +38,7 @@ class AppointmentController {
     const smsDate = getSmsDateUtils(startTime);
 
     const [services, missingIds] = await Promise.all([
-      serviceServices.getMultipleServices(serviceIds),
+      serviceServices.getMultipleServices(serviceIds, true),
       serviceServices.validateServiceIds(serviceIds),
     ]);
 
@@ -49,6 +49,9 @@ class AppointmentController {
         false,
         `Services with IDs: ${missingIds} could not be found`
       );
+
+    const timeOfCompletion =
+      appointmentService.calculateTotalTimeOfCompletion(services);
 
     const { priceBreakdown, price, lowerCaseCategory } =
       appointmentService.getPriceForService(services, category);
@@ -87,9 +90,15 @@ class AppointmentController {
     await takenTimeslotServices.updateTakenTimeslotsForStaff(
       takenTimeSlotForStaff,
       timeString,
-      2,
+      timeOfCompletion,
       date
     );
+
+    const endTime = appointmentService.calculateEndTime(
+      startTime,
+      timeOfCompletion
+    );
+    req.body.endTime = endTime;
 
     const appointment = await appointmentService.createAppointment({
       body: req.body,
@@ -222,7 +231,7 @@ class AppointmentController {
 
   //Update/edit appointment data
   updateAppointment = async (req, res) => {
-    const { startTime } = req.body;
+    const { startTime, serviceIds } = req.body;
     const appointment = await appointmentService.getAppointmentById(
       req.params.id
     );
@@ -231,6 +240,20 @@ class AppointmentController {
     }
 
     if (startTime) {
+      let services = await serviceServices.getMultipleServices(
+        appointment.carDetails.serviceIds,
+        true
+      );
+      if (serviceIds) {
+        services = await serviceServices.getMultipleServices(
+          appointment.carDetails.serviceIds,
+          true
+        );
+      }
+
+      const timeOfCompletion =
+        appointmentService.calculateTotalTimeOfCompletion(services);
+
       const staffTakenTimeSlot =
         await takenTimeslotServices.retriveTakenTimeslots(appointment);
 
@@ -264,7 +287,7 @@ class AppointmentController {
       await takenTimeslotServices.updateTakenTimeslotsForStaff(
         takenTimeSlotForStaff,
         timeString,
-        2,
+        timeOfCompletion,
         date
       );
     }
