@@ -120,14 +120,24 @@ class CustomerService {
     updateCache(`customers`, expires, customers);
   };
 
-  async updateCustomerById(id, department) {
-    return await Customer.findByIdAndUpdate(
-      id,
-      {
-        $set: department,
-      },
-      { new: true }
-    );
+  async updateCustomerById(qbo, Id, customer, SyncToken) {
+    return new Promise((resolve, reject) => {
+      qbo.updateCustomer(
+        {
+          Id,
+          SyncToken,
+          sparse: true,
+          ...customer,
+        },
+        (err, customer) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(customer);
+          }
+        }
+      );
+    });
   }
 
   async deleteCustomer(id) {

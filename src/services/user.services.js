@@ -5,6 +5,8 @@ const { User } = require("../model/user.model");
 const propertiesToPick = require("../common/propertiesToPick.common");
 const generateRandomAvatar = require("../utils/generateRandomAvatar.utils");
 
+const { customerDefaultPassword } = process.env;
+
 class UserService {
   //Create new user
   async createUser(user) {
@@ -14,6 +16,60 @@ class UserService {
 
     return await user.save();
   }
+
+  async validateUserIds(userIds) {
+    if (userIds) {
+      const users = await User.find({
+        _id: { $in: userIds },
+      });
+
+      const foundIds = users.map((d) => d._id.toString());
+
+      const missingIds = userIds.filter((id) => !foundIds.includes(id));
+
+      return missingIds;
+    }
+    return [];
+  }
+
+  async fetchIdsOfStaffsWhoCanTakeAppointments() {
+    const staffsWhoCanTakeAppointments = await User.find({
+      "staffDetails.isAvailableForAppointments": true,
+    });
+
+    return staffsWhoCanTakeAppointments.map((staff) => staff._id);
+  }
+
+  createUserWithAvatar = async (req, user, departments) => {
+    const { body } = req;
+    if (body.role === "staff") propertiesToPick.push("staffDetails");
+    if (body.role === "customer") {
+      propertiesToPick.push("customerDetails");
+
+      if (!body.password) req.body.password = customerDefaultPassword;
+    }
+
+    user = new User(_.pick(body, [...propertiesToPick, "password"]));
+
+    const avatarUrl = await generateRandomAvatar(user.email);
+    user.avatarUrl = avatarUrl;
+    user.avatarImgTag = `<img src=${avatarUrl} alt=${user._id}>`;
+
+    user.role = user.role.toLowerCase();
+    if (user.role === "staff" || user.role === "manager")
+      user.departments = [...new Set(departments)];
+
+    user = await this.createUser(user);
+
+    const token = user.generateAuthToken();
+    if (user.role === "staff") propertiesToPick.push("staffDetails");
+    if (user.role === "customer") propertiesToPick.push("customerDetails");
+
+    user = _.pick(user, propertiesToPick);
+    // It creates a token which is sent as a header to the client
+
+    return { user, token };
+  };
 
   async getUserById(userId) {
     return await User.findOne({ _id: userId, isDeleted: undefined });
@@ -107,6 +163,19 @@ class UserService {
       { new: true }
     );
   }
+  async updateCustomerByQbId(id, user) {
+    return await User.findOneAndUpdate(
+      { "customerDetails.qbId": id },
+      {
+        $set: user,
+      },
+      { new: true }
+    );
+  }
+
+  findCustomerByQbId(qbId) {
+    return User.findOne({ "customerDetails.qbId": qbId, isDeleted: undefined });
+  }
 
   async signInStaff(email, currentSignInLocation) {
     return User.findOneAndUpdate(
@@ -153,29 +222,6 @@ class UserService {
   async deleteUser(id) {
     return await User.findByIdAndRemove(id);
   }
-
-  createUserWithAvatar = async (req, user, departments) => {
-    if (req.body.role === "staff") propertiesToPick.push("staffDetails");
-
-    user = new User(_.pick(req.body, [...propertiesToPick, "password"]));
-
-    const avatarUrl = await generateRandomAvatar(user.email);
-    user.avatarUrl = avatarUrl;
-    user.avatarImgTag = `<img src=${avatarUrl} alt=${user._id}>`;
-
-    user.role = user.role.toLowerCase();
-    if (user.role !== "customer") user.departments = [...new Set(departments)];
-
-    user = await this.createUser(user);
-
-    const token = user.generateAuthToken();
-    if (user.role === "staff") propertiesToPick.push("staffDetails");
-
-    user = _.pick(user, propertiesToPick);
-    // It creates a token which is sent as a header to the client
-
-    return { user, token };
-  };
 
   async addAvatarToUser(user) {
     const avatarUrl = await generateRandomAvatar(user.email);

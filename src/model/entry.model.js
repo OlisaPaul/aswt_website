@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 const Joi = require("joi");
 const addVirtualIdUtils = require("../utils/addVirtualId.utils");
-const { DATE } = require("../common/constants.common");
+const newDate = require("../utils/newDate.utils");
 
 const entrySchema = new mongoose.Schema(
   {
@@ -19,12 +19,17 @@ const entrySchema = new mongoose.Schema(
     },
     entryDate: {
       type: Date,
+      default: newDate(),
     },
     isActive: {
       type: Boolean,
       default: true,
     },
     numberOfCarsAdded: {
+      type: Number,
+      default: 0,
+    },
+    numberOfVehicles: {
       type: Number,
       default: 0,
     },
@@ -37,22 +42,19 @@ const entrySchema = new mongoose.Schema(
       carDetails: [
         {
           vin: { type: String, required: true },
-          year: { type: Number, required: true },
+          year: { type: Number },
           make: {
             type: String,
             minlength: 3,
             maxlength: 255,
-            required: true,
           },
           entryDate: {
             type: Date,
-            default: new Date(),
           },
           model: {
             type: String,
             minlength: 1,
             maxlength: 255,
-            required: true,
           },
           colour: {
             type: String,
@@ -63,9 +65,13 @@ const entrySchema = new mongoose.Schema(
             {
               type: mongoose.Schema.Types.ObjectId,
               ref: "service",
-              required: true,
             },
           ],
+          customerNote: {
+            type: String,
+            minlength: 5,
+            maxlength: 512,
+          },
           note: {
             type: String,
             minlength: 5,
@@ -79,7 +85,6 @@ const entrySchema = new mongoose.Schema(
             type: String,
             minlength: 3,
             maxlength: 10,
-            required: true,
           },
           staffId: {
             type: mongoose.Schema.Types.ObjectId,
@@ -175,7 +180,17 @@ function validate(entry) {
   const schema = Joi.object({
     customerId: Joi.string().required(),
     numberOfVehicles: Joi.number().min(1).max(100000).required(),
-    vehiclesLeft: Joi.number(),
+  });
+
+  return schema.validate(entry);
+}
+
+function validateAddVin(entry) {
+  const schema = Joi.object({
+    carDetails: Joi.object({
+      vin: Joi.string().required(),
+      customerNote: Joi.string().min(5).max(255),
+    }).required(),
   });
 
   return schema.validate(entry);
@@ -235,6 +250,7 @@ function validateModifyPrice(entry) {
 
 exports.validate = validate;
 exports.validatePatch = validatePatch;
+exports.validateAddVin = validateAddVin;
 exports.validateModifyPrice = validateModifyPrice;
 exports.validateAddInvoicePatch = validateAddInvoicePatch;
 exports.validateModifyCarDetails = validateModifyCarDetails;

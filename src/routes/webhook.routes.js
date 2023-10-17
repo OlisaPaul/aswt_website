@@ -4,5 +4,10 @@ const router = express.Router();
 const qboAsyncMiddleware = require("../middleware/qboAsync.middleware");
 
 router.post("/", qboAsyncMiddleware(webhookControllers.webhook));
+router.post(
+  "/stripe",
+  express.raw({ type: "application/json" }),
+  qboAsyncMiddleware(webhookControllers.stripeWebHook)
+);
 
 module.exports = router;

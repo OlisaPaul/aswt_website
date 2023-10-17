@@ -2,7 +2,7 @@ module.exports = function () {
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   const date = new Date();
-  const options = { timeZone: "America/Chicago" };
+  const options = { timeZone };
 
   // Use toLocaleString to format the date in the desired time zone
   const formattedDateString = date.toLocaleString("en-US", options);

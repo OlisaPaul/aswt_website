@@ -6,7 +6,7 @@ const { Department } = require("./department.model");
 const addVirtualIdUtils = require("../utils/addVirtualId.utils");
 require("dotenv").config();
 
-const StaffDetailsSchema = new mongoose.Schema({
+const staffDetailsSchema = new mongoose.Schema({
   signInLocations: [
     {
       timestamp: {
@@ -24,6 +24,10 @@ const StaffDetailsSchema = new mongoose.Schema({
       },
     },
   ],
+  isAvailableForAppointments: {
+    type: Boolean,
+    default: false,
+  },
   earningRate: {
     type: Number,
     min: 1,
@@ -46,6 +50,15 @@ const StaffDetailsSchema = new mongoose.Schema({
       latitude: { type: Number },
       longitude: { type: Number },
     },
+  },
+});
+
+const customerDetailsSchema = new mongoose.Schema({
+  companyName: {
+    type: String,
+  },
+  qbId: {
+    type: String,
   },
 });
 
@@ -103,7 +116,11 @@ const userSchema = new mongoose.Schema(
       type: String,
     },
     staffDetails: {
-      type: StaffDetailsSchema,
+      type: staffDetailsSchema,
+      default: undefined,
+    },
+    customerDetails: {
+      type: customerDetailsSchema,
       default: undefined,
     },
     isDeleted: {

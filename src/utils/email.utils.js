@@ -24,17 +24,30 @@ const mailGenerator = new Mailgen({
   },
 });
 
-const email = (firstName, token) => {
+const url = process.env.clientUrl;
+const intro = "This is a Password reset Mail";
+const link = (token) => `${url}/?token=${token}`;
+const instructions = "Click this link to reset your password:";
+const text = "Reset your password";
+
+const email = (
+  firstName,
+  token,
+  emailIntro,
+  emailLink,
+  buttonInstructions,
+  buttonText
+) => {
   return {
     body: {
       name: firstName,
-      intro: "This is a Password reset Mail",
+      intro: emailIntro,
       action: {
-        instructions: "Click this link to reset your password:",
+        instructions: buttonInstructions,
         button: {
           color: "#22BC66", // Optional action button color
-          text: "Reset your password",
-          link: `https://aswt-test.netlify.app/reset-password/?token=${token}`,
+          text: buttonText,
+          link: emailLink(token),
         },
       },
       outro:
@@ -43,15 +56,49 @@ const email = (firstName, token) => {
   };
 };
 
-const emailBody = (firstName, token) =>
-  mailGenerator.generate(email(firstName, token));
+const mailSubject = `Your password reset link`;
 
-const mailOptions = (receiversEmail, firstName, token) => {
+const emailBody = (
+  firstName,
+  token,
+  emailIntro,
+  emailLink,
+  buttonInstructions,
+  buttonText
+) =>
+  mailGenerator.generate(
+    email(
+      firstName,
+      token,
+      emailIntro,
+      emailLink,
+      buttonInstructions,
+      buttonText
+    )
+  );
+
+const mailOptions = (
+  receiversEmail,
+  firstName,
+  token,
+  subject = mailSubject,
+  emailIntro = intro,
+  emailLink = link,
+  buttonInstructions = instructions,
+  buttonText = text
+) => {
   return {
     from: emailId,
     to: receiversEmail,
-    subject: `Your password reset link`,
-    html: emailBody(firstName, token),
+    subject,
+    html: emailBody(
+      firstName,
+      token,
+      emailIntro,
+      emailLink,
+      buttonInstructions,
+      buttonText
+    ),
   };
 };
 
