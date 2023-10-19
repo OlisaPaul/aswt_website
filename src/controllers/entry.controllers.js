@@ -84,6 +84,14 @@ class EntryController {
     if (error)
       return jsonResponse(res, 404, false, error.Fault.Error[0].Detail);
 
+    if (!customer.PrimaryEmailAddr)
+      return jsonResponse(
+        res,
+        404,
+        false,
+        "Customer does not have a primary email address"
+      );
+
     carDetails.serviceIds = [...new Set(serviceIds)];
 
     req.params = {
@@ -317,8 +325,6 @@ class EntryController {
   async getCarsDoneForCustomer(req, res) {
     const { customerId } = req.params;
     const filterArguments = getFilterArguments(req);
-
-    console.log(filterArguments);
 
     const carsDoneForCustomer = await entryService.getCarsDoneByStaff(
       ...filterArguments

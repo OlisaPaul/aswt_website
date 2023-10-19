@@ -15,6 +15,7 @@ var QuickBooks = require("../node-quickbooks/index");
 var Tokens = require("csrf");
 const tokenServices = require("../services/token.services");
 var csrf = new Tokens();
+const stripe = require("stripe")(process.env.stripeSecretKey);
 
 QuickBooks.setOauthVersion("2.0");
 
@@ -88,6 +89,43 @@ class Ouath2Controller {
       '<!DOCTYPE html><html lang="en"><head></head><body><script>window.opener.location.reload(); window.close();</script></body></html>'
     );
   }
+
+  startStripe(req, res) {
+    res.render("stripe.ejs");
+  }
+
+  stripeAuthorize = (req, res) => {
+    const clientId = process.env.stripeClientId;
+    // Generate a random state string for OAuth
+    const state = this.generateAntiForgery(req.session);
+
+    // Set the scopes to request access to
+    const scopes = "read_write";
+    const redirectUri = process.env.stripeRedirectUri;
+    const stripeAuthUri = process.env.stripeAuthUri;
+
+    const authorizationUrl = `${stripeAuthUri}${clientId}&scope=${scopes}&state=${state}&redirect_uri=${redirectUri}`;
+    res.render("stripe.ejs", { authorizationUrl });
+  };
+
+  stripeCallback = async (req, res) => {
+    const code = req.query.code;
+
+    // Exchange the code for an access token
+    const response = await stripe.oauth.token({
+      grant_type: "authorization_code",
+      code,
+    });
+
+    console.log(response);
+
+    // Save the access token to use for API requests
+    // ...
+
+    res.send(
+      '<!DOCTYPE html><html lang="en"><head></head><body><script>window.opener.location.reload(); window.close();</script></body></html>'
+    );
+  };
 }
 
 module.exports = new Ouath2Controller();

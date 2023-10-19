@@ -77,7 +77,7 @@ class WebhookControllers {
       let paymentIntentId;
 
       // Successfully constructed event
-      console.log("✅ Success:", event.id);
+      // console.log("✅ Success:", event.id);
 
       // Cast event data to Stripe object
       if (event.type === "payment_intent.succeeded") {
@@ -88,10 +88,15 @@ class WebhookControllers {
           const amount = intent.amount_received / centToUsd;
           const currency = intent.currency;
           const appointmentId = intent.metadata.appointmentId;
+          const stripeConnectedAccountId =
+            intent.metadata.stripeConnectedAccountId;
           const paymentDate = newDateUtils();
           const paymentIntentId = intent.id;
 
-          if (appointmentId) {
+          if (
+            appointmentId &&
+            stripeConnectedAccountId === process.env.stripeConnectedAccountId
+          ) {
             await appointmentServices.updateAppointmentPaymentDetails({
               appointmentId,
               amount,
@@ -104,7 +109,6 @@ class WebhookControllers {
         }
       } else if (event.type === "charge.succeeded") {
         const charge = event.data.object;
-        console.log("Charge ID:", charge.id);
         // console.log(`Charge: ${charge.payment_intent}`);
       } else if (event.type === "checkout.session.completed") {
         const checkout = event.data.object;
@@ -117,7 +121,7 @@ class WebhookControllers {
         //   });
         // }
       } else {
-        console.warn(`🤷‍♀️ Unhandled event type: ${event.type}`);
+        console.warn(`🤷‍♀️ Unhandled event type: `); //${event.type}`);
       }
 
       // Return a response to acknowledge receipt of the event
