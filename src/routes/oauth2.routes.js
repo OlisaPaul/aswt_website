@@ -6,4 +6,8 @@ router.get("/", ouath2Controller.start);
 router.get("/requestToken", ouath2Controller.requestToken);
 router.get("/callback", ouath2Controller.callback);
 
+router.get("/start", ouath2Controller.startStripe);
+router.get("/stripe", ouath2Controller.stripeAuthorize);
+router.get("/callback/stripe", ouath2Controller.stripeCallback);
+
 module.exports = router;
