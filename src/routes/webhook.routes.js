@@ -5,7 +5,7 @@ const qboAsyncMiddleware = require("../middleware/qboAsync.middleware");
 
 router.post("/", qboAsyncMiddleware(webhookControllers.webhook));
 router.post(
-  "/stripe",
+  "/stripe-acoounts",
   express.raw({ type: "application/json" }),
   qboAsyncMiddleware(webhookControllers.stripeWebHook)
 );

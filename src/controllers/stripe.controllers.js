@@ -2,6 +2,7 @@ require("dotenv").config();
 const { jsonResponse, errorMessage } = require("../common/messages.common");
 const appointmentServices = require("../services/appointment.services");
 const stripe = require("stripe")(process.env.stripeSecretKey);
+const stripeAccount = process.env.stripeAccount;
 
 class StripeController {
   async stripeCheckoutSession(req, res) {
@@ -19,31 +20,37 @@ class StripeController {
 
       const priceBreakdown = appointment.carDetails.priceBreakdown;
 
-      const session = await stripe.checkout.sessions.create({
-        payment_method_types: ["card"],
-        mode: "payment",
-        line_items: priceBreakdown.map((item) => {
-          const thirtyPercentOfPriceInCents = item.price * 30;
-          return {
-            price_data: {
-              currency: "usd",
-              product_data: {
-                name: item.serviceName,
+      const session = await stripe.checkout.sessions.create(
+        {
+          payment_method_types: ["card"],
+          mode: "payment",
+          line_items: priceBreakdown.map((item) => {
+            const thirtyPercentOfPriceInCents = item.price * 30;
+            return {
+              price_data: {
+                currency: "usd",
+                product_data: {
+                  name: item.serviceName,
+                },
+                unit_amount: thirtyPercentOfPriceInCents,
               },
-              unit_amount: thirtyPercentOfPriceInCents,
+              quantity: 1,
+            };
+          }),
+          payment_intent_data: {
+            metadata: {
+              appointmentId,
+              stripeConnectedAccountId: process.env.stripeConnectedAccountId,
             },
-            quantity: 1,
-          };
-        }),
-        payment_intent_data: {
-          metadata: {
-            appointmentId,
           },
-        },
 
-        success_url: `${process.env.apiUrl}/client/success.html`,
-        cancel_url: `${process.env.apiUrl}/client/cancel.html`,
-      });
+          success_url: `${process.env.apiUrl}/client/success.html`,
+          cancel_url: `${process.env.apiUrl}/client/cancel.html`,
+        },
+        {
+          stripeAccount,
+        }
+      );
       res.json({ url: session.url });
     } catch (e) {
       res.status(500).json({ error: e.message });

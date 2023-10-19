@@ -9,6 +9,7 @@ const {
   pipelineForCustomerIdAndVin,
 } = require("../utils/entry.utils");
 const { validMonthNames } = require("../common/constants.common");
+const newDateUtils = require("../utils/newDate.utils");
 
 class EntryService {
   getEntries = async (args = { entryId: undefined, customerId: undefined }) => {
@@ -45,7 +46,7 @@ class EntryService {
     vin
   ) => {
     return Entry.aggregate(
-      pipelineForCustomerIdAndVin({
+      pipeline({
         entryId,
         staffId,
         customerId,
@@ -490,6 +491,7 @@ class EntryService {
     carDetails.category = carDetails.category.toLowerCase();
     carDetails.staffId = staffId;
     carDetails.priceBreakdown = priceBreakdown;
+    carDetails.entryDate = newDateUtils();
 
     if (carExist) {
       const { carIndex, carAddedByCustomer } = this.getCarAddedByCustomer(
@@ -497,7 +499,6 @@ class EntryService {
         carDetails.vin
       );
 
-      console.log("Car Exist");
       const combinedCardetail = this.mergeCarObjects(
         carAddedByCustomer,
         carDetails
