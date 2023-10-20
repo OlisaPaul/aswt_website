@@ -72,16 +72,16 @@ router.put(
   [
     auth,
     admin,
-    validateObjectIdWithXArg(["serviceId", "customerId"]),
+    validateObjectIdWithXArg(["serviceId"]),
     validateMiddleware(validateUpdateDealershipPrice),
   ],
-  asyncMiddleware(serviceController.updateDealershipPrice)
+  qboAsyncMiddleware(serviceController.updateDealershipPrice)
 );
 
 router.put(
   "/delete-dealership-price/service/:serviceId/customer/:customerId",
   [auth, admin, validateObjectIdWithXArg(["serviceId", "customerId"])],
-  asyncMiddleware(serviceController.deleteCustomerDealerShip)
+  qboAsyncMiddleware(serviceController.deleteCustomerDealerShip)
 );
 
 router.delete(

@@ -232,6 +232,11 @@ class ServiceController {
     });
     if (!service) return res.status(404).send(errorMessage("service"));
 
+    const { error: customerError } =
+      await customerService.getOrSetCustomerOnCache(customerId);
+    if (customerError)
+      return jsonResponse(res, 404, false, error.Fault.Error[0].Detail);
+
     let { updatedService, error } = serviceService.updateCustomerPrice(
       service,
       customerId,
