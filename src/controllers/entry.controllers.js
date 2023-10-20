@@ -78,6 +78,7 @@ class EntryController {
     const { id: customerId } = req.params;
     const { carDetails } = req.body;
     const { category, serviceIds, vin } = carDetails;
+    const role = req.user.role;
 
     const { data: customer, error } =
       await customerService.getOrSetCustomerOnCache(customerId);
@@ -91,6 +92,8 @@ class EntryController {
         false,
         "Customer does not have a primary email address"
       );
+
+    if (role === "porter") carDetails.waitingList = true;
 
     carDetails.serviceIds = [...new Set(serviceIds)];
 
@@ -345,6 +348,57 @@ class EntryController {
     updatedEntry.id = updatedEntry._id;
 
     res.send(successMessage(MESSAGES.UPDATED, updatedEntry));
+  }
+
+  async updateCarDoneByStaff(req, res) {
+    const { vin } = req.params;
+    const { serviceId } = req.body;
+    const staffId = req.user._id;
+
+    const [entry, service] = await Promise.all([
+      entryService.getEntryByVin(vin),
+      serviceService.getServiceById(serviceId),
+    ]);
+
+    if (!entry) return res.status(404).send(errorMessage("entry"));
+    if (!service) return res.status(404).send(errorMessage("service"));
+
+    const { carIndex, carWithVin } = entryService.getCarByVin({ entry, vin });
+
+    if (Array.isArray(carWithVin) && carWithVin.length < 1)
+      return jsonResponse(res, 404, false, "We can't find car with vin");
+
+    if (!carWithVin.serviceIds.includes(serviceId))
+      return jsonResponse(
+        res,
+        403,
+        false,
+        "The service has either been added by a staff member or has not been added by a porter."
+      );
+
+    const isCompleted = carWithVin.isCompleted;
+    const waitingList = carWithVin.waitingList;
+    const isServiceIdsEmpty = carWithVin.serviceIds.length < 1;
+
+    if (isCompleted || isServiceIdsEmpty || !waitingList)
+      return jsonResponse(res, 403, false, "This car has been marked as done");
+
+    const updatedCarWithVIn = await entryService.updateServicesDoneOnCar(
+      carWithVin,
+      serviceId,
+      staffId
+    );
+
+    console.log(updatedCarWithVIn);
+
+    entry.invoice.carDetails[carIndex] = updatedCarWithVIn;
+
+    await entry.save();
+
+    delete carWithVin.price;
+    delete carWithVin.priceBreakdown;
+
+    return res.send(successMessage(MESSAGES.UPDATED, carWithVin));
   }
 
   //Update/edit entry data

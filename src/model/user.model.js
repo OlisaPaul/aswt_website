@@ -171,7 +171,7 @@ function validate(user) {
       .min(4)
       .max(255)
       .required()
-      .valid("staff", "manager", "receptionist", "editor")
+      .valid("staff", "manager", "receptionist", "editor", "gm", "porter")
       .insensitive(),
     departments: Joi.array()
       .items(Joi.objectId().required())
@@ -179,13 +179,15 @@ function validate(user) {
         is: "receptionist",
         then: Joi.forbidden(),
       })
-      .when("role", { is: "editor", then: Joi.forbidden() })
-      .when("role", { is: "staff", then: Joi.required() })
-      .when("role", { is: "manager", then: Joi.required() }),
+      .when("role", {
+        is: Joi.valid("editor", "gm", "receptionist"),
+        then: Joi.forbidden(),
+        otherwise: Joi.required(),
+      }),
     staffDetails: Joi.object({
       earningRate: Joi.number().min(1).required(),
     }).when("role", {
-      is: "staff",
+      is: Joi.valid("staff", "porter"),
       then: Joi.required(),
       otherwise: Joi.forbidden(),
     }),
