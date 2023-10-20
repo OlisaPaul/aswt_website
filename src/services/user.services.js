@@ -42,7 +42,8 @@ class UserService {
 
   createUserWithAvatar = async (req, user, departments) => {
     const { body } = req;
-    if (body.role === "staff") propertiesToPick.push("staffDetails");
+    const staffRoles = ["staff", "porter"];
+    if (staffRoles.includes(body.role)) propertiesToPick.push("staffDetails");
     if (body.role === "customer") {
       propertiesToPick.push("customerDetails");
 
@@ -62,7 +63,7 @@ class UserService {
     user = await this.createUser(user);
 
     const token = user.generateAuthToken();
-    if (user.role === "staff") propertiesToPick.push("staffDetails");
+    if (staffRoles.includes(body.role)) propertiesToPick.push("staffDetails");
     if (user.role === "customer") propertiesToPick.push("customerDetails");
 
     user = _.pick(user, propertiesToPick);
