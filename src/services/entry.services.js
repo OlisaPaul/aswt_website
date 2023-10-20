@@ -18,6 +18,35 @@ class EntryService {
     return await Entry.aggregate(pipeline({ entryId, customerId }));
   };
 
+  getEntryById(entryId) {
+    return Entry.findById(entryId);
+  }
+  getTodayAndTomorrow() {
+    const today = new Date(); // This gives you the current date and time in your local time zone
+    today.setHours(0, 0, 0, 0); // Set the time to midnight
+
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1); // Get the date for tomorrow
+
+    return { today, tomorrow };
+  }
+
+  getEntryByVin = async (vin) => {
+    const { today, tomorrow } = this.getTodayAndTomorrow();
+
+    return Entry.findOne({
+      entryDate: {
+        $gte: today,
+        $lt: tomorrow,
+      },
+      "invoice.carDetails": {
+        $elemMatch: {
+          vin,
+        },
+      },
+    });
+  };
+
   async validateEntryIds(entryIds) {
     const entrys = await Entry.find({
       _id: { $in: entryIds },
@@ -69,15 +98,18 @@ class EntryService {
     return results;
   };
 
-  async getEntryForCustomerLast24Hours(customerId) {
+  getEntryForCustomerLast24Hours = async (customerId) => {
+    const { today, tomorrow } = this.getTodayAndTomorrow();
+
     return Entry.findOne({
       customerId,
       entryDate: {
-        $gte: DATE.yesterday,
+        $gte: today,
+        $lt: tomorrow,
       },
       isActive: true,
     });
-  }
+  };
 
   getServiceAndEntry = async (carDetails, customerId, customer) => {
     const results = {};
@@ -366,6 +398,30 @@ class EntryService {
       { session }
     );
   }
+
+  updateServicesDoneOnCar = async (carWithVin, serviceId, staffId) => {
+    // Remove service done on care from serviceIds
+    let serviceIds = carWithVin.serviceIds;
+    serviceIds = serviceIds.filter(
+      (service) => service.toString() !== serviceId.toString()
+    );
+
+    if (serviceIds.length < 1) {
+      carWithVin.waitingList = false;
+      carWithVin.isCompleted = true;
+    }
+
+    carWithVin.serviceIds = serviceIds;
+
+    const serviceDone = {
+      staffId,
+      serviceId,
+    };
+
+    carWithVin.servicesDone.push(serviceDone);
+
+    return carWithVin;
+  };
 
   updateCarProperties(req, carDoneByStaff) {
     if (req.body.category) {

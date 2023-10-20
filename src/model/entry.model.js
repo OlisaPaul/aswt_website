@@ -41,6 +41,12 @@ const entrySchema = new mongoose.Schema(
       },
       carDetails: [
         {
+          waitingList: {
+            type: Boolean,
+          },
+          isCompleted: {
+            type: Boolean,
+          },
           vin: { type: String, required: true },
           year: { type: Number },
           make: {
@@ -67,6 +73,29 @@ const entrySchema = new mongoose.Schema(
               ref: "service",
             },
           ],
+          servicesDone: [
+            {
+              serviceId: {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: "service",
+              },
+              staffId: {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: "user",
+              },
+            },
+          ],
+          geoLocation: {
+            description: {
+              type: String,
+              minlength: 3,
+              maxlength: 255,
+            },
+            coordinates: {
+              latitude: { type: Number, required: true },
+              longitude: { type: Number, required: true },
+            },
+          },
           customerNote: {
             type: String,
             minlength: 5,
@@ -228,6 +257,13 @@ function validateAddInvoicePatch(entry) {
       make: Joi.string().min(3).max(255).required(),
       model: Joi.string().min(1).max(255).required(),
       note: Joi.string().min(5).max(255),
+      geoLocation: Joi.object({
+        description: Joi.string().min(1).max(255).required(),
+        coordinates: Joi.object({
+          latitude: Joi.number().required(),
+          longitude: Joi.number().required(),
+        }),
+      }).required(),
       category: Joi.string()
         .valid("suv", "sedan", "truck")
         .insensitive()
@@ -247,11 +283,22 @@ function validateModifyPrice(entry) {
 
   return schema.validate(entry);
 }
+function validateModifyServiceDone(entry) {
+  const schema = Joi.object({
+    note: Joi.string(),
+    serviceId: Joi.objectId().required(),
+  });
 
-exports.validate = validate;
-exports.validatePatch = validatePatch;
-exports.validateAddVin = validateAddVin;
-exports.validateModifyPrice = validateModifyPrice;
-exports.validateAddInvoicePatch = validateAddInvoicePatch;
-exports.validateModifyCarDetails = validateModifyCarDetails;
+  return schema.validate(entry);
+}
+
+exports.joiValidator = {
+  validate,
+  validatePatch,
+  validateAddVin,
+  validateModifyPrice,
+  validateAddInvoicePatch,
+  validateModifyCarDetails,
+  validateModifyServiceDone,
+};
 exports.Entry = Entry;

@@ -1,4 +1,5 @@
 const validateMiddleware = require("../middleware/validate.middleware");
+const { joiValidator } = require("../model/entry.model");
 const admin = require("../middleware/admin.middleware");
 const auth = require("../middleware/auth.middleware");
 const manager = require("../middleware/manager.middleware");
@@ -11,6 +12,11 @@ const entryController = require("../controllers/entry.controllers");
 const validateObjectIdWithXArgMiddleware = require("../middleware/validateObjectIdWithXArg.middleware");
 const adminOrManagerMiddleware = require("../middleware/adminOrManager.middleware");
 const staffMiddleware = require("../middleware/staff.middleware");
+const validateServiceIdsMiddleware = require("../middleware/validateServiceIds.middleware");
+const validateMonthYearParamsMiddleware = require("../middleware/validateMonthYearParams.middleware");
+const validateDateParams = require("../middleware/validDateParams.middleware");
+const roleBaseAuth = require("../middleware/roleBaseAuth.middleware.");
+
 const {
   validate,
   validatePatch,
@@ -18,11 +24,8 @@ const {
   validateAddInvoicePatch,
   validateModifyPrice,
   validateModifyCarDetails,
-} = require("../model/entry.model");
-const validateServiceIdsMiddleware = require("../middleware/validateServiceIds.middleware");
-const validateMonthYearParamsMiddleware = require("../middleware/validateMonthYearParams.middleware");
-const validateDateParams = require("../middleware/validDateParams.middleware");
-const roleBaseAuth = require("../middleware/roleBaseAuth.middleware.");
+  validateModifyServiceDone,
+} = joiValidator;
 
 router.post(
   "/",
@@ -129,8 +132,22 @@ router.put(
 
 router.put(
   "/add-car/:id",
-  [auth, staffMiddleware, validateMiddleware(validateAddInvoicePatch)],
+  [
+    auth,
+    roleBaseAuth(["porter", "staff"]),
+    validateMiddleware(validateAddInvoicePatch),
+  ],
   qboAsyncMiddleware(entryController.addInvoice)
+);
+
+router.put(
+  "/update-car-service/:vin",
+  [
+    auth,
+    roleBaseAuth(["staff"]),
+    validateMiddleware(validateModifyServiceDone),
+  ],
+  qboAsyncMiddleware(entryController.updateCarDoneByStaff)
 );
 
 router.put(
