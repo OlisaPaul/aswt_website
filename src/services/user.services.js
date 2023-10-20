@@ -253,6 +253,8 @@ class UserService {
 
     return await user.save();
   }
+
+  staffRoles = ["staff", "porter"];
 }
 
 module.exports = new UserService();

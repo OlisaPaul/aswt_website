@@ -9,8 +9,9 @@ class AuthController {
   //Create a new user
   async logIn(req, res) {
     const { email, password } = req.body;
+    const { staffRoles } = userService;
 
-    if (req.user.role !== "staff" && req.body.signInLocations)
+    if (!staffRoles.includes(req.user.role) && req.body.signInLocations)
       return res
         .status(400)
         .send({ message: "Only a staff can sign in", success: false });
