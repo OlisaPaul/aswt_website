@@ -263,6 +263,7 @@ class EntryController {
       staffEntries = _.cloneDeep(entry);
       staffEntries.invoice.carDetails = [];
       delete staffEntries.invoice.totalPrice;
+      delete staffEntries.invoice.paymentDetails;
     }
 
     if (customerId && Array.isArray(staffEntries)) {

@@ -7,6 +7,7 @@ const getWebhookDataUtils = require("../utils/getWebhookData.utils");
 const {
   pipeline,
   pipelineForCustomerIdAndVin,
+  test,
 } = require("../utils/entry.utils");
 const { validMonthNames } = require("../common/constants.common");
 const newDateUtils = require("../utils/newDate.utils");
@@ -76,16 +77,17 @@ class EntryService {
     waitingList
   ) => {
     return Entry.aggregate(
-      pipeline({
-        entryId,
-        staffId,
-        customerId,
-        date,
-        startDate,
-        endDate,
-        vin,
-        waitingList,
-      })
+      // pipeline({
+      //   entryId,
+      //   staffId,
+      //   customerId,
+      //   date,
+      //   startDate,
+      //   endDate,
+      //   vin,
+      //   waitingList,
+      // })
+      test({ staffId, customerId, entryId })
     );
   };
 

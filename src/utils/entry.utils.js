@@ -1,6 +1,8 @@
 const mongoose = require("mongoose");
 const { days, validMonthNames, DATE } = require("../common/constants.common");
 const getTodayAndTomorrowUtils = require("./getTodayAndTomorrow.utils");
+const { carDetailsProperties, entryProperties } =
+  require("../model/entry.model").joiValidator;
 
 class EntryUtils {
   pipeline = ({
@@ -27,14 +29,20 @@ class EntryUtils {
         $project: {
           ...this.entryUnFilteredProps,
           invoice: 1,
-          filteredDetails: this.filteredDetails({
-            staffId,
-            startDate,
-            date,
-            endDate,
-            vin,
-            waitingList,
-          }),
+          filteredDetails: {
+            $filter: {
+              input: "$invoice.carDetails",
+              as: "car",
+              cond: this.dateFilter({
+                staffId,
+                date,
+                startDate,
+                endDate,
+                vin,
+                waitingList,
+              }),
+            },
+          },
         },
       },
 
@@ -488,6 +496,213 @@ class EntryUtils {
         counts[car[period]]++;
       });
     });
+  }
+
+  test = ({ staffId, entryId, customerId }) => {
+    const match = {};
+    if (entryId) {
+      match._id = new mongoose.Types.ObjectId(entryId);
+    }
+    if (customerId) match.customerId = customerId;
+
+    return [
+      {
+        $match: match,
+      },
+      {
+        $unwind: "$invoice.carDetails",
+      },
+      {
+        $match: {
+          "invoice.carDetails.servicesDone.staffId":
+            new mongoose.Types.ObjectId(staffId),
+        },
+      },
+      {
+        $group: {
+          _id: "$_id", // Group by entry _id
+          ...this.getGroupEntryField(),
+          invoice: { $first: "$invoice" },
+          carDetails: { $push: "$invoice.carDetails" },
+          // Reconstruct carDetails array
+        },
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "carDetails.servicesDone.staffId",
+          foreignField: "_id",
+          as: "staffDetails",
+        },
+      },
+      {
+        $unwind: "$staffDetails",
+      },
+      {
+        $addFields: {
+          "carDetails.servicesDone.staffName": {
+            $concat: ["$staffDetails.firstName", " ", "$staffDetails.lastName"],
+          },
+        },
+      },
+      {
+        $project: {
+          ...this.getEntryField(),
+          invoice: {
+            name: "$invoice.name",
+            carDetails: {
+              $map: {
+                input: "$carDetails",
+                as: "carDetail",
+                in: this.getCarDetailsField("$$carDetail"),
+              },
+            },
+          },
+        },
+      },
+      {
+        $project: {
+          ...this.getEntryField(),
+          invoice: {
+            name: "$invoice.name",
+            carDetails: {
+              $map: {
+                input: "$invoice.carDetails",
+                as: "carDetail",
+                in: {
+                  $mergeObjects: [
+                    "$$carDetail",
+                    {
+                      servicesDone: {
+                        $filter: {
+                          input: "$$carDetail.servicesDone",
+                          as: "serviceDone",
+                          cond: {
+                            $eq: [
+                              "$$serviceDone.staffId",
+                              new mongoose.Types.ObjectId(staffId),
+                            ],
+                          },
+                        },
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      },
+      {
+        $lookup: {
+          from: "services",
+          localField: "invoice.carDetails.servicesDone.serviceId",
+          foreignField: "_id",
+          as: "service",
+        },
+      },
+      {
+        $project: {
+          ...this.getEntryField(),
+          invoice: {
+            name: "$invoice.name",
+            carDetails: {
+              $map: {
+                input: "$invoice.carDetails",
+                as: "carDetail",
+                in: {
+                  $mergeObjects: [
+                    "$$carDetail",
+                    {
+                      servicesDone: {
+                        $map: {
+                          input: "$$carDetail.servicesDone",
+                          as: "serviceDone",
+                          in: {
+                            $mergeObjects: [
+                              "$$serviceDone",
+
+                              {
+                                serviceName: {
+                                  $let: {
+                                    vars: {
+                                      serviceId: "$$serviceDone.serviceId",
+                                    },
+                                    in: {
+                                      $first: {
+                                        $filter: {
+                                          input: {
+                                            $map: {
+                                              input: "$service",
+                                              as: "service",
+                                              in: {
+                                                $cond: [
+                                                  {
+                                                    $eq: [
+                                                      "$$service._id",
+                                                      {
+                                                        $toObjectId:
+                                                          "$$serviceId",
+                                                      },
+                                                    ],
+                                                  },
+                                                  "$$service.name",
+                                                  null,
+                                                ],
+                                              },
+                                            },
+                                          },
+                                          as: "item",
+                                          cond: {
+                                            $ne: ["$$item", null],
+                                          },
+                                        },
+                                      },
+                                    },
+                                  },
+                                },
+                              },
+                            ],
+                          },
+                        },
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      },
+    ];
+  };
+  getCarDetailsField(field) {
+    const carDetailsField = carDetailsProperties.reduce((result, property) => {
+      if (property !== "price" && property !== "priceBreakdown")
+        result[property] = `${field}.${property}`;
+
+      return result;
+    }, {});
+
+    return carDetailsField;
+  }
+  getEntryField() {
+    const entryField = entryProperties.reduce((result, property) => {
+      if (property !== "invoice") result[property] = 1;
+
+      return result;
+    }, {});
+
+    return entryField;
+  }
+  getGroupEntryField() {
+    const entryField = entryProperties.reduce((result, property) => {
+      if (property !== "invoice") result[property] = { $first: `$${property}` };
+
+      return result;
+    }, {});
+
+    return entryField;
   }
 }
 
