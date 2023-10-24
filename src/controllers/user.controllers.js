@@ -86,17 +86,22 @@ class UserController {
   async getLoggedInStaffs(req, res) {
     const { role } = req.user;
 
+    let loggedInStaff = [];
+
     let staffIds = undefined;
     if (role === "manager") {
       const manager = await userService.getUserById(req.user._id);
       if (!manager) return res.status(404).send(errorMessage("manager"));
 
+      if (!manager.managerDetails) manager.managerDetails = {};
+
       staffIds = manager.managerDetails.staffLocationsVisibleToManager;
+
+      if (!staffIds || staffIds.length < 1)
+        return res.send(successMessage(MESSAGES.FETCHED, loggedInStaff));
     }
 
-    console.log(staffIds);
-
-    const loggedInStaff = await userService.getLoggedInStaffs(staffIds);
+    loggedInStaff = await userService.getLoggedInStaffs(staffIds);
 
     res.send(successMessage(MESSAGES.FETCHED, loggedInStaff));
   }
@@ -120,6 +125,8 @@ class UserController {
       );
 
     if (idToAdd) {
+      if (!manager.managerDetails) manager.managerDetails = {};
+
       const staffIds = manager.managerDetails.staffLocationsVisibleToManager;
 
       if (staffIds) {
