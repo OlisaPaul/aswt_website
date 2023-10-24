@@ -77,17 +77,16 @@ class EntryService {
     waitingList
   ) => {
     return Entry.aggregate(
-      // pipeline({
-      //   entryId,
-      //   staffId,
-      //   customerId,
-      //   date,
-      //   startDate,
-      //   endDate,
-      //   vin,
-      //   waitingList,
-      // })
-      test({ staffId, customerId, entryId })
+      pipeline({
+        entryId,
+        staffId,
+        customerId,
+        date,
+        startDate,
+        endDate,
+        vin,
+        waitingList,
+      })
     );
   };
 
