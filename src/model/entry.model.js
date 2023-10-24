@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const Joi = require("joi");
 const addVirtualIdUtils = require("../utils/addVirtualId.utils");
 const newDate = require("../utils/newDate.utils");
+const { Service } = require("./service.model");
 
 const carDetails = [
   {
@@ -34,7 +35,7 @@ const carDetails = [
     serviceIds: [
       {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "service",
+        ref: Service,
       },
     ],
     servicesDone: [
@@ -80,6 +81,11 @@ const carDetails = [
       maxlength: 10,
     },
     staffId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "user",
+      default: null,
+    },
+    porterId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "user",
       default: null,

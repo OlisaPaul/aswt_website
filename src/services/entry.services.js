@@ -32,10 +32,10 @@ class EntryService {
     return { today, tomorrow };
   }
 
-  getEntryByVin = async (vin) => {
+  getEntryByVin = async (vin, lean) => {
     const { today, tomorrow } = this.getTodayAndTomorrow();
 
-    return Entry.findOne({
+    const query = Entry.findOne({
       entryDate: {
         $gte: today,
         $lt: tomorrow,
@@ -46,6 +46,10 @@ class EntryService {
         },
       },
     });
+
+    return lean
+      ? query.populate("invoice.carDetails.serviceIds", "name").lean()
+      : query;
   };
 
   async validateEntryIds(entryIds) {
@@ -74,6 +78,7 @@ class EntryService {
     startDate,
     endDate,
     vin,
+    porterId,
     waitingList
   ) => {
     return Entry.aggregate(
@@ -85,6 +90,7 @@ class EntryService {
         startDate,
         endDate,
         vin,
+        porterId,
         waitingList,
       })
     );
@@ -101,17 +107,26 @@ class EntryService {
     return results;
   };
 
-  getEntryForCustomerLast24Hours = async (customerId) => {
+  getEntryForCustomerLast24Hours = async (customerId, lean) => {
     const { today, tomorrow } = this.getTodayAndTomorrow();
 
-    return Entry.findOne({
-      customerId,
-      entryDate: {
-        $gte: today,
-        $lt: tomorrow,
-      },
-      isActive: true,
-    });
+    return lean
+      ? Entry.findOne({
+          customerId,
+          entryDate: {
+            $gte: today,
+            $lt: tomorrow,
+          },
+          isActive: true,
+        }).lean()
+      : Entry.findOne({
+          customerId,
+          entryDate: {
+            $gte: today,
+            $lt: tomorrow,
+          },
+          isActive: true,
+        });
   };
 
   getServiceAndEntry = async (carDetails, customerId, customer) => {
@@ -275,11 +290,14 @@ class EntryService {
     const { carDetails } = entry.invoice;
 
     const carIndex = carDetails.findIndex((car) => {
-      if (car.staffId)
+      if (car.staffId || car.porterId) {
+        const id = car.staffId ? car.staffId : car.porterId;
+
         return (
-          car.staffId.toString() === req.user._id.toString() &&
+          id.toString() === req.user._id.toString() &&
           car.vin.toString() === vin.toString()
         );
+      }
     });
 
     const carDoneByStaff = carDetails[carIndex];
@@ -320,6 +338,29 @@ class EntryService {
 
     return { servicePrice, servicePriceIndex };
   }
+
+  sortCarDetailsByPrice(carDetails) {
+    // Use the sort() method with a comparison function
+    carDetails.sort(function (a, b) {
+      // Convert the prices to numbers for comparison
+      const priceA = parseFloat(a.price);
+      const priceB = parseFloat(b.price);
+
+      // Compare the prices in descending order
+      // (highest price first, lowest price last)
+      return priceB - priceA;
+    });
+
+    // Create a new array with the sorted car details without "price" and "priceBreakdown" properties
+    const sortedCarDetailsWithoutPrice = carDetails.map(function (car) {
+      // Destructure the car object to create a new object without "price" and "priceBreakdown"
+      const { price, priceBreakdown, ...carWithoutPrice } = car;
+      return carWithoutPrice;
+    });
+
+    return sortedCarDetailsWithoutPrice;
+  }
+
   //Create new entry
   async createEntry(entry) {
     return await entry.save();
@@ -544,11 +585,12 @@ class EntryService {
     price,
     priceBreakdown,
     staffId,
-    carExist
+    carExist,
+    porterId
   ) => {
     carDetails.price = price;
     carDetails.category = carDetails.category.toLowerCase();
-    carDetails.staffId = staffId;
+    staffId ? (carDetails.staffId = staffId) : (carDetails.porterId = porterId);
     carDetails.priceBreakdown = priceBreakdown;
     carDetails.entryDate = newDateUtils();
 
